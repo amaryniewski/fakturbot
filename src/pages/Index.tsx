@@ -2,12 +2,13 @@
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <main className="min-h-screen flex items-center justify-center bg-background">
+      <article className="text-center max-w-xl p-8">
+        <h1 className="text-4xl font-bold mb-4">FakturBot – Inbox for invoices</h1>
+        <p className="text-xl text-muted-foreground mb-6">Zaloguj się, aby przejść do panelu aplikacji.</p>
+        <a href="/login" className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-6 py-3 font-medium">Przejdź do logowania</a>
+      </article>
+    </main>
   );
 };
 
