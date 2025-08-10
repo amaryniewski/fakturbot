@@ -23,10 +23,14 @@ const AuthCallback = () => {
     const run = async () => {
       try {
         const code = search.get("code");
-        if (!code) {
-          toast({ title: "Błąd", description: "Brak parametru code w adresie." });
-        } else {
+        if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            toast({ title: "Błąd autoryzacji", description: error.message });
+          }
+        } else {
+          // Obsługa linków z hash (#access_token, #type=recovery)
+          const { error } = await (supabase.auth as any).getSessionFromUrl({ storeSession: true });
           if (error) {
             toast({ title: "Błąd autoryzacji", description: error.message });
           }
@@ -35,7 +39,9 @@ const AuthCallback = () => {
         toast({ title: "Błąd", description: e?.message || String(e) });
       } finally {
         setLoading(false);
-        if (type === "recovery") setRecovery(true);
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const typeFromHash = hashParams.get("type");
+        if (type === "recovery" || typeFromHash === "recovery") setRecovery(true);
         else navigate("/app", { replace: true });
       }
     };
