@@ -22,13 +22,17 @@ const AuthCallback = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-        if (error) {
-          // For magic links older flow, attempt to proceed; user might already be logged in
-          console.error(error);
+        const code = search.get("code");
+        if (!code) {
+          toast({ title: "Błąd", description: "Brak parametru code w adresie." });
+        } else {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            toast({ title: "Błąd autoryzacji", description: error.message });
+          }
         }
-      } catch (e) {
-        console.error(e);
+      } catch (e: any) {
+        toast({ title: "Błąd", description: e?.message || String(e) });
       } finally {
         setLoading(false);
         if (type === "recovery") setRecovery(true);
@@ -41,6 +45,10 @@ const AuthCallback = () => {
 
   const onSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password.length < 8) {
+      toast({ title: "Hasło zbyt krótkie", description: "Użyj co najmniej 8 znaków." });
+      return;
+    }
     if (password !== password2) {
       toast({ title: "Hasła nie są takie same", description: "Spróbuj ponownie." });
       return;
@@ -50,7 +58,7 @@ const AuthCallback = () => {
       toast({ title: "Błąd", description: error.message });
       return;
     }
-    toast({ title: "Hasło ustawione" });
+    toast({ title: "Hasło ustawione", description: "Możesz kontynuować." });
     navigate("/app", { replace: true });
   };
 
