@@ -22,37 +22,47 @@ const AuthCallback = () => {
   useEffect(() => {
     const run = async () => {
       try {
+        // Sprawdź najpierw czy to recovery (PRZED wymianą sesji)
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const typeFromHash = hashParams.get("type");
+        const isRecovery = type === "recovery" || typeFromHash === "recovery";
+        
         const code = search.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             toast({ title: "Błąd autoryzacji", description: error.message });
+            return;
           }
         } else {
           // Obsługa linków z hash (#access_token, #refresh_token, #type=recovery)
-          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
           const access_token = hashParams.get("access_token");
           const refresh_token = hashParams.get("refresh_token");
           if (access_token && refresh_token) {
             const { error } = await supabase.auth.setSession({ access_token, refresh_token });
             if (error) {
               toast({ title: "Błąd autoryzacji", description: error.message });
+              return;
             } else {
               // Usuń wrażliwe tokeny z paska adresu
               window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
             }
-          } else {
+          } else if (!isRecovery) {
             toast({ title: "Błąd autoryzacji", description: "Brak tokenów sesji w adresie URL." });
+            return;
           }
+        }
+        
+        // Sprawdź recovery PRZED przekierowaniem
+        if (isRecovery) {
+          setRecovery(true);
+        } else {
+          navigate("/app", { replace: true });
         }
       } catch (e: any) {
         toast({ title: "Błąd", description: e?.message || String(e) });
       } finally {
         setLoading(false);
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-        const typeFromHash = hashParams.get("type");
-        if (type === "recovery" || typeFromHash === "recovery") setRecovery(true);
-        else navigate("/app", { replace: true });
       }
     };
     run();
