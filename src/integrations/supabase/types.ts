@@ -299,6 +299,14 @@ export type Database = {
           token_expires_at: string
         }[]
       }
+      get_decrypted_mailbox_tokens: {
+        Args: { p_mailbox_id: string }
+        Returns: {
+          access_token: string
+          refresh_token: string
+          expires_at: string
+        }[]
+      }
       insert_encrypted_gmail_connection: {
         Args: {
           p_email: string
@@ -307,6 +315,15 @@ export type Database = {
           p_token_expires_at?: string
         }
         Returns: string
+      }
+      insert_encrypted_mailbox_tokens: {
+        Args: {
+          p_mailbox_id: string
+          p_access_token: string
+          p_refresh_token?: string
+          p_expires_at?: string
+        }
+        Returns: boolean
       }
       is_member: {
         Args: { p_company_id: string }
@@ -318,6 +335,15 @@ export type Database = {
           p_access_token: string
           p_refresh_token?: string
           p_token_expires_at?: string
+        }
+        Returns: boolean
+      }
+      update_encrypted_mailbox_tokens: {
+        Args: {
+          p_mailbox_id: string
+          p_access_token: string
+          p_refresh_token?: string
+          p_expires_at?: string
         }
         Returns: boolean
       }
