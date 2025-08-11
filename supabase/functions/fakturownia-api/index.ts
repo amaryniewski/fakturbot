@@ -130,16 +130,22 @@ const handler = async (req: Request): Promise<Response> => {
 
         const connection = connectionData[0];
         
-        // Fetch invoices from current month
-        const invoicesUrl = `https://${connection.domain}.fakturownia.pl/invoices.json?period=this_month&api_token=${connection.api_token}`;
+        // Fetch invoices from last 3 months to get more data
+        const invoicesUrl = `https://${connection.domain}.fakturownia.pl/invoices.json?period=last_12_months&api_token=${connection.api_token}&per_page=50`;
+        console.log('Fetching invoices from URL:', invoicesUrl.replace(connection.api_token, '***TOKEN***'));
+        
         const invoicesResponse = await fetch(invoicesUrl);
         
         if (!invoicesResponse.ok) {
-          throw new Error('Failed to fetch invoices from Fakturownia');
+          console.error('Fakturownia API error:', invoicesResponse.status, invoicesResponse.statusText);
+          const errorText = await invoicesResponse.text();
+          console.error('Error response:', errorText);
+          throw new Error(`Failed to fetch invoices from Fakturownia: ${invoicesResponse.status}`);
         }
 
         const invoices = await invoicesResponse.json();
         console.log(`Fetched ${invoices.length} invoices from Fakturownia`);
+        console.log('Sample invoice data:', invoices[0] ? JSON.stringify(invoices[0], null, 2) : 'No invoices found');
 
         // Process and store invoices in our database
         let processedCount = 0;
