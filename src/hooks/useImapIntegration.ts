@@ -28,7 +28,7 @@ export const useImapIntegration = () => {
     try {
       const { data, error } = await supabase
         .from('mailboxes')
-        .select('id, email, server, port, is_active, created_at')
+        .select('id, email, server, port, status, created_at')
         .eq('provider', 'imap')
         .eq('status', 'active');
 
@@ -38,7 +38,7 @@ export const useImapIntegration = () => {
         email: item.email,
         server: item.server || '',
         port: item.port || 993,
-        is_active: true,
+        is_active: item.status === 'active',
         created_at: item.created_at
       })) || []);
     } catch (error: any) {

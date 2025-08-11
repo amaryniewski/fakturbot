@@ -267,8 +267,10 @@ export type Database = {
           last_dispatch_at: string | null
           last_sync_at: string | null
           locked_until: string | null
+          port: number | null
           processed_label_id: string | null
           provider: Database["public"]["Enums"]["mail_provider"]
+          server: string | null
           status: Database["public"]["Enums"]["mailbox_status"]
         }
         Insert: {
@@ -279,8 +281,10 @@ export type Database = {
           last_dispatch_at?: string | null
           last_sync_at?: string | null
           locked_until?: string | null
+          port?: number | null
           processed_label_id?: string | null
           provider: Database["public"]["Enums"]["mail_provider"]
+          server?: string | null
           status?: Database["public"]["Enums"]["mailbox_status"]
         }
         Update: {
@@ -291,8 +295,10 @@ export type Database = {
           last_dispatch_at?: string | null
           last_sync_at?: string | null
           locked_until?: string | null
+          port?: number | null
           processed_label_id?: string | null
           provider?: Database["public"]["Enums"]["mail_provider"]
+          server?: string | null
           status?: Database["public"]["Enums"]["mailbox_status"]
         }
         Relationships: [
