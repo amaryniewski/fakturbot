@@ -123,12 +123,13 @@ const handler = async (req: Request): Promise<Response> => {
         }
       );
     }
+    // Check if mailbox already exists
     const { data: existingMailbox } = await supabase
       .from('mailboxes')
       .select('id')
       .eq('email', email)
       .eq('provider', 'imap')
-      .single();
+      .maybeSingle();
 
     if (existingMailbox) {
       throw new Error('Mailbox already connected');
@@ -140,7 +141,7 @@ const handler = async (req: Request): Promise<Response> => {
       .from('memberships')
       .select('company_id')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (existingMembership) {
       companyId = existingMembership.company_id;
