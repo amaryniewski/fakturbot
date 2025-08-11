@@ -366,6 +366,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_fakturownia_connection_exists: {
+        Args: { p_domain: string }
+        Returns: boolean
+      }
+      check_gmail_connection_exists: {
+        Args: { p_email: string }
+        Returns: boolean
+      }
       decrypt_token: {
         Args: { encrypted_value: string }
         Returns: string
@@ -397,6 +405,28 @@ export type Database = {
           access_token: string
           refresh_token: string
           expires_at: string
+        }[]
+      }
+      get_user_fakturownia_connections: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          company_name: string
+          domain: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }[]
+      }
+      get_user_gmail_connections: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+          token_expires_at: string
         }[]
       }
       insert_encrypted_fakturownia_connection: {
