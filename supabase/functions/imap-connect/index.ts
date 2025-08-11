@@ -137,11 +137,16 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Create a company for the user if it doesn't exist
     let companyId: string;
-    const { data: existingMembership } = await supabase
+    const { data: existingMembership, error: membershipError } = await supabase
       .from('memberships')
       .select('company_id')
       .eq('user_id', user.id)
       .maybeSingle();
+
+    if (membershipError) {
+      console.error('Error checking membership:', membershipError);
+      throw new Error(`Database error: ${membershipError.message}`);
+    }
 
     if (existingMembership) {
       companyId = existingMembership.company_id;
@@ -153,11 +158,14 @@ const handler = async (req: Request): Promise<Response> => {
         .select('id')
         .single();
 
-      if (companyError) throw companyError;
+      if (companyError) {
+        console.error('Error creating company:', companyError);
+        throw new Error(`Failed to create company: ${companyError.message}`);
+      }
       companyId = newCompany.id;
 
       // Create membership
-      const { error: membershipError } = await supabase
+      const { error: membershipInsertError } = await supabase
         .from('memberships')
         .insert([{
           user_id: user.id,
@@ -165,7 +173,10 @@ const handler = async (req: Request): Promise<Response> => {
           role: 'admin'
         }]);
 
-      if (membershipError) throw membershipError;
+      if (membershipInsertError) {
+        console.error('Error creating membership:', membershipInsertError);
+        throw new Error(`Failed to create membership: ${membershipInsertError.message}`);
+      }
     }
 
     // Insert mailbox with final settings
