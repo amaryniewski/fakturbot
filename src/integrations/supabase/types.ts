@@ -74,7 +74,7 @@ export type Database = {
           email: string
           id: string
           is_active: boolean
-          refresh_token: string
+          refresh_token: string | null
           token_expires_at: string | null
           updated_at: string
           user_id: string
@@ -85,7 +85,7 @@ export type Database = {
           email: string
           id?: string
           is_active?: boolean
-          refresh_token: string
+          refresh_token?: string | null
           token_expires_at?: string | null
           updated_at?: string
           user_id: string
@@ -96,7 +96,7 @@ export type Database = {
           email?: string
           id?: string
           is_active?: boolean
-          refresh_token?: string
+          refresh_token?: string | null
           token_expires_at?: string | null
           updated_at?: string
           user_id?: string
@@ -282,8 +282,43 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      decrypt_token: {
+        Args: { encrypted_value: string }
+        Returns: string
+      }
+      encrypt_token: {
+        Args: { token_value: string }
+        Returns: string
+      }
+      get_decrypted_gmail_tokens: {
+        Args: { p_connection_id: string }
+        Returns: {
+          access_token: string
+          refresh_token: string
+          email: string
+          token_expires_at: string
+        }[]
+      }
+      insert_encrypted_gmail_connection: {
+        Args: {
+          p_email: string
+          p_access_token: string
+          p_refresh_token: string
+          p_token_expires_at?: string
+        }
+        Returns: string
+      }
       is_member: {
         Args: { p_company_id: string }
+        Returns: boolean
+      }
+      update_encrypted_gmail_tokens: {
+        Args: {
+          p_connection_id: string
+          p_access_token: string
+          p_refresh_token?: string
+          p_token_expires_at?: string
+        }
         Returns: boolean
       }
     }
