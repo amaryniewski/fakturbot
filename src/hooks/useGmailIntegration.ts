@@ -16,10 +16,8 @@ export const useGmailIntegration = () => {
 
   const fetchConnections = async () => {
     try {
-      const { data, error } = await supabase
-        .from('gmail_connections')
-        .select('id, email, is_active, created_at')
-        .eq('is_active', true);
+      // Use secure function that doesn't expose OAuth tokens
+      const { data, error } = await supabase.rpc('get_user_gmail_connections');
 
       if (error) throw error;
       setConnections(data || []);

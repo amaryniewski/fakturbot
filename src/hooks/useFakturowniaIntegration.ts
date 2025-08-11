@@ -8,6 +8,7 @@ interface FakturowniaConnection {
   domain: string;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 interface ConnectFakturowniaData {
@@ -23,10 +24,8 @@ export const useFakturowniaIntegration = () => {
 
   const fetchConnections = async () => {
     try {
-      const { data, error } = await supabase
-        .from('fakturownia_connections')
-        .select('id, company_name, domain, is_active, created_at')
-        .eq('is_active', true);
+      // Use secure function that doesn't expose API tokens
+      const { data, error } = await supabase.rpc('get_user_fakturownia_connections');
 
       if (error) throw error;
       setConnections(data || []);
