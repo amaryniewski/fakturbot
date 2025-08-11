@@ -86,9 +86,10 @@ const handler = async (req: Request): Promise<Response> => {
         const accountData = await testResponse.json();
         console.log('Fakturownia connection test successful:', accountData.name);
 
-        // Store encrypted connection using service role with user context
+        // Store encrypted connection using service role with explicit user_id
         const { data: connectionId, error: dbError } = await supabaseClient
           .rpc('insert_encrypted_fakturownia_connection', {
+            p_user_id: user.id,
             p_company_name: companyName,
             p_domain: domain,
             p_api_token: apiToken

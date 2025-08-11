@@ -349,7 +349,12 @@ export type Database = {
         }[]
       }
       insert_encrypted_fakturownia_connection: {
-        Args: { p_company_name: string; p_domain: string; p_api_token: string }
+        Args: {
+          p_user_id: string
+          p_company_name: string
+          p_domain: string
+          p_api_token: string
+        }
         Returns: string
       }
       insert_encrypted_gmail_connection: {
