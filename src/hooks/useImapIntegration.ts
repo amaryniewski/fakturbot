@@ -65,7 +65,8 @@ export const useImapIntegration = () => {
         description: `Pomyślnie połączono skrzynkę: ${formData.email}`,
       });
 
-      fetchConnections();
+      // Refresh connections immediately
+      await fetchConnections();
     } catch (error: any) {
       console.error('Error connecting IMAP:', error);
       toast({
