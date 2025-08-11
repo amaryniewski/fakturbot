@@ -106,6 +106,7 @@ export const useGmailIntegration = () => {
 
   const disconnectGmail = async (connectionId: string) => {
     try {
+      // Securely disable the connection by setting is_active to false
       const { error } = await supabase
         .from('gmail_connections')
         .update({ is_active: false })
