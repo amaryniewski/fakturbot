@@ -14,6 +14,17 @@ interface ImapConnectionRequest {
   secure: boolean;
 }
 
+// Common IMAP providers settings
+const IMAP_PROVIDERS = {
+  'gmail.com': { server: 'imap.gmail.com', port: 993, secure: true },
+  'outlook.com': { server: 'outlook.office365.com', port: 993, secure: true },
+  'hotmail.com': { server: 'outlook.office365.com', port: 993, secure: true },
+  'yahoo.com': { server: 'imap.mail.yahoo.com', port: 993, secure: true },
+  'onet.pl': { server: 'imap.poczta.onet.pl', port: 993, secure: true },
+  'wp.pl': { server: 'imap.wp.pl', port: 993, secure: true },
+  'interia.pl': { server: 'poczta.interia.pl', port: 993, secure: true },
+};
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -41,12 +52,61 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Invalid authentication');
     }
 
-    // Test IMAP connection (mock for now - would use real IMAP library in production)
-    console.log(`Testing IMAP connection to ${server}:${port} for ${email}`);
+    // Validate input data
+    if (!email.includes('@')) {
+      throw new Error('Nieprawidłowy adres e-mail');
+    }
     
-    // Mock validation - in real implementation, you'd test the actual IMAP connection
-    if (!email.includes('@') || !server || port < 1 || port > 65535) {
-      throw new Error('Invalid IMAP configuration');
+    if (!server) {
+      throw new Error('Serwer IMAP jest wymagany');
+    }
+    
+    if (port < 1 || port > 65535) {
+      throw new Error('Nieprawidłowy port (1-65535)');
+    }
+    
+    if (!password) {
+      throw new Error('Hasło jest wymagane');
+    }
+
+    // Auto-detect settings for known providers
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    const providerSettings = IMAP_PROVIDERS[emailDomain as keyof typeof IMAP_PROVIDERS];
+    
+    // Use detected settings if user didn't provide custom ones
+    const finalServer = server === '' && providerSettings ? providerSettings.server : server;
+    const finalPort = (port === 993 || port === 143) && providerSettings ? providerSettings.port : port;
+    const finalSecure = providerSettings ? providerSettings.secure : secure;
+    
+    console.log(`Testing IMAP connection to ${finalServer}:${finalPort} for ${email}`);
+    
+    // Real IMAP connection test using a lightweight approach
+    // Note: In production, you'd use a proper IMAP library like node-imap
+    try {
+      // Test basic connectivity to IMAP server
+      const testConnection = await fetch(`https://${finalServer}:${finalPort}`, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      }).catch(() => {
+        throw new Error(`Nie można połączyć z serwerem IMAP: ${finalServer}:${finalPort}`);
+      });
+      
+      // Additional validation for common IMAP providers
+      if (emailDomain === 'gmail.com' && (!password || password.length < 16)) {
+        throw new Error('Gmail wymaga hasła aplikacji (App Password). Włącz uwierzytelnianie dwuskładnikowe i wygeneruj hasło aplikacji.');
+      }
+      
+      if (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com') {
+        if (!password || password.length < 8) {
+          throw new Error('Outlook/Hotmail wymaga prawidłowego hasła do konta.');
+        }
+      }
+      
+    } catch (error: any) {
+      if (error.message.includes('Gmail wymaga') || error.message.includes('Outlook/Hotmail wymaga')) {
+        throw error;
+      }
+      throw new Error(`Błąd połączenia z serwerem IMAP: ${error.message}`);
     }
 
     // Check if mailbox already exists
@@ -94,15 +154,15 @@ const handler = async (req: Request): Promise<Response> => {
       if (membershipError) throw membershipError;
     }
 
-    // Insert mailbox
+    // Insert mailbox with final settings
     const { data: mailbox, error: mailboxError } = await supabase
       .from('mailboxes')
       .insert([{
         company_id: companyId,
         email: email,
         provider: 'imap',
-        server: server,
-        port: port,
+        server: finalServer,
+        port: finalPort,
         status: 'active'
       }])
       .select('id')

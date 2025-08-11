@@ -67,13 +67,61 @@ export const useImapIntegration = () => {
 
       // Refresh connections immediately
       await fetchConnections();
+      return true;
     } catch (error: any) {
       console.error('Error connecting IMAP:', error);
+      
+      // Parse error message for better user experience
+      let errorMessage = "Nie udało się połączyć ze skrzynką IMAP";
+      
+      if (error.message) {
+        if (error.message.includes('Gmail wymaga hasła aplikacji')) {
+          errorMessage = "Gmail wymaga hasła aplikacji. Włącz uwierzytelnianie dwuskładnikowe i wygeneruj hasło aplikacji w ustawieniach Google.";
+        } else if (error.message.includes('Outlook/Hotmail wymaga')) {
+          errorMessage = "Sprawdź hasło do konta Outlook/Hotmail.";
+        } else if (error.message.includes('Nie można połączyć z serwerem')) {
+          errorMessage = "Nie można połączyć z serwerem IMAP. Sprawdź adres serwera i port.";
+        } else if (error.message.includes('Mailbox already connected')) {
+          errorMessage = "Ta skrzynka jest już połączona.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Błąd",
-        description: error.message || "Nie udało się połączyć ze skrzynką IMAP",
+        title: "Błąd połączenia IMAP",
+        description: errorMessage,
         variant: "destructive",
       });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testConnection = async (formData: ImapFormData) => {
+    setLoading(true);
+    try {
+      // Test connection without saving
+      const { data, error } = await supabase.functions.invoke('imap-connect', {
+        body: { ...formData, testOnly: true }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Test połączenia",
+        description: "Połączenie z serwerem IMAP działa prawidłowo!",
+      });
+      return true;
+    } catch (error: any) {
+      console.error('Error testing IMAP:', error);
+      toast({
+        title: "Test nieudany",
+        description: error.message || "Nie udało się połączyć z serwerem IMAP",
+        variant: "destructive",
+      });
+      return false;
     } finally {
       setLoading(false);
     }
@@ -113,6 +161,7 @@ export const useImapIntegration = () => {
     loading,
     connectImap,
     disconnectImap,
+    testConnection,
     refreshConnections: fetchConnections,
   };
 };

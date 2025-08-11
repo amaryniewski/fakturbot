@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
 import { useImapIntegration } from "@/hooks/useImapIntegration";
 import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
+import { ImapConnectionForm } from "@/components/ImapConnectionForm";
 import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
@@ -16,7 +17,8 @@ const SettingsPage = () => {
     connections: imapConnections, 
     loading: imapLoading, 
     connectImap, 
-    disconnectImap 
+    disconnectImap,
+    testConnection 
   } = useImapIntegration();
   const { 
     connections: fakturowniaConnections, 
@@ -50,9 +52,12 @@ const SettingsPage = () => {
   };
 
   const handleImapConnect = async () => {
-    await connectImap(imapFormData);
-    setImapDialog(false);
-    setImapFormData({ email: '', password: '', server: '', port: 993, secure: true });
+    const success = await connectImap(imapFormData);
+    if (success) {
+      setImapDialog(false);
+      setImapFormData({ email: '', password: '', server: '', port: 993, secure: true });
+    }
+    return success;
   };
   
   return (
@@ -134,68 +139,26 @@ const SettingsPage = () => {
                       Połącz IMAP
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-2xl">
                     <DialogHeader>
                       <DialogTitle>Połącz skrzynkę IMAP</DialogTitle>
                       <DialogDescription>
                         Wprowadź dane dostępu do swojej skrzynki pocztowej. Obsługujemy większość dostawców poczty.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="imap-email">Adres e-mail</Label>
-                        <Input
-                          id="imap-email"
-                          type="email"
-                          placeholder="twoj@email.com"
-                          value={imapFormData.email}
-                          onChange={(e) => setImapFormData(prev => ({ ...prev, email: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="imap-password">Hasło</Label>
-                        <Input
-                          id="imap-password"
-                          type="password"
-                          placeholder="Hasło do skrzynki"
-                          value={imapFormData.password}
-                          onChange={(e) => setImapFormData(prev => ({ ...prev, password: e.target.value }))}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="imap-server">Serwer IMAP</Label>
-                          <Input
-                            id="imap-server"
-                            placeholder="imap.gmail.com"
-                            value={imapFormData.server}
-                            onChange={(e) => setImapFormData(prev => ({ ...prev, server: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="imap-port">Port</Label>
-                          <Input
-                            id="imap-port"
-                            type="number"
-                            placeholder="993"
-                            value={imapFormData.port}
-                            onChange={(e) => setImapFormData(prev => ({ ...prev, port: parseInt(e.target.value) || 993 }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    <ImapConnectionForm
+                      formData={imapFormData}
+                      setFormData={setImapFormData}
+                      onConnect={handleImapConnect}
+                      onTest={testConnection}
+                      loading={imapLoading}
+                    />
                     <DialogFooter>
                       <Button 
                         variant="outline" 
                         onClick={() => setImapDialog(false)}
                       >
                         Anuluj
-                      </Button>
-                      <Button 
-                        onClick={handleImapConnect}
-                        disabled={!imapFormData.email || !imapFormData.password || !imapFormData.server || imapLoading}
-                      >
-                        {imapLoading ? "Łączenie..." : "Połącz"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
