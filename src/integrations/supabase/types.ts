@@ -136,15 +136,50 @@ export type Database = {
         }
         Relationships: []
       }
-      invoices: {
+      invoice_processing_rules: {
         Row: {
           created_at: string
+          id: string
+          is_active: boolean | null
+          rule_config: Json
+          rule_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          rule_config: Json
+          rule_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          rule_config?: Json
+          rule_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          confidence_score: number | null
+          created_at: string
           error_message: string | null
+          extracted_data: Json | null
           file_name: string
           file_size: number | null
           file_url: string | null
           gmail_message_id: string | null
           id: string
+          needs_review: boolean | null
           received_at: string
           sender_email: string
           status: string
@@ -153,13 +188,18 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          confidence_score?: number | null
           created_at?: string
           error_message?: string | null
+          extracted_data?: Json | null
           file_name: string
           file_size?: number | null
           file_url?: string | null
           gmail_message_id?: string | null
           id?: string
+          needs_review?: boolean | null
           received_at: string
           sender_email: string
           status?: string
@@ -168,13 +208,18 @@ export type Database = {
           user_id: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          confidence_score?: number | null
           created_at?: string
           error_message?: string | null
+          extracted_data?: Json | null
           file_name?: string
           file_size?: number | null
           file_url?: string | null
           gmail_message_id?: string | null
           id?: string
+          needs_review?: boolean | null
           received_at?: string
           sender_email?: string
           status?: string

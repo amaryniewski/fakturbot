@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
 
 type Invoice = {
   id: string;
@@ -14,6 +15,11 @@ type Invoice = {
   file_size: number | null;
   file_url: string | null;
   status: string;
+  extracted_data?: any;
+  needs_review?: boolean;
+  confidence_score?: number;
+  approved_at?: string;
+  approved_by?: string;
 };
 
 type Item = {
@@ -70,6 +76,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
   
@@ -93,6 +100,63 @@ const Dashboard = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const processGmailEmails = async () => {
+    setProcessing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gmail-processor');
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Sukces",
+        description: `Przetworzono ${data.processedInvoices} nowych faktur z Gmail`,
+      });
+      
+      fetchInvoices();
+    } catch (error: any) {
+      console.error('Error processing Gmail:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się przetworzyć emaili z Gmail",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const approveSelected = async () => {
+    if (selected.length === 0) return;
+    
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ 
+          needs_review: false,
+          approved_at: new Date().toISOString(),
+          approved_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .in('id', selected);
+
+      if (error) throw error;
+
+      toast({
+        title: "Zatwierdzono",
+        description: `Zatwierdzono ${selected.length} faktur`,
+      });
+
+      setSelected([]);
+      fetchInvoices();
+    } catch (error: any) {
+      console.error('Error approving invoices:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się zatwierdzić faktur",
+        variant: "destructive",
+      });
     }
   };
 
@@ -164,7 +228,16 @@ const Dashboard = () => {
               ) : data.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No invoices found. Try syncing with Fakturownia in Settings.
+                    <div className="py-8">
+                      <p className="mb-4">Brak faktur z emaili. Połącz Gmail i rozpocznij automatyczne przetwarzanie.</p>
+                      <Button 
+                        onClick={processGmailEmails} 
+                        disabled={processing}
+                        className="mx-auto"
+                      >
+                        {processing ? "Przetwarzanie..." : "Sprawdź Gmail"}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -187,10 +260,15 @@ const Dashboard = () => {
         <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={processGmailEmails} disabled={processing}>
+              {processing ? "Przetwarzanie..." : "Sprawdź Gmail"}
+            </Button>
             <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
               {loading ? "Loading..." : "Refresh"}
             </Button>
-            <Button disabled={selected.length === 0} onClick={() => console.log("Approve", selected)}>Approve selected</Button>
+            <Button disabled={selected.length === 0} onClick={approveSelected}>
+              Zatwierdź wybrane
+            </Button>
           </div>
         </div>
       </article>
@@ -206,7 +284,24 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="flex-1 flex flex-col">
-            <div className="h-12 border-b px-4 grid place-items-center text-sm">{selectedItem.file}</div>
+            <div className="h-12 border-b px-4 flex items-center justify-between text-sm">
+              <span>{selectedItem.file}</span>
+              {invoices.find(i => i.id === selectedItem.id)?.needs_review && (
+                <Badge variant="secondary">Wymaga przeglądu</Badge>
+              )}
+            </div>
+            
+            {/* Show extracted data if available */}
+            {(() => {
+              const invoice = invoices.find(i => i.id === selectedItem.id);
+              return invoice?.extracted_data ? (
+                <InvoiceExtractedData 
+                  data={invoice.extracted_data}
+                  confidenceScore={invoice.confidence_score}
+                />
+              ) : null;
+            })()}
+            
             <iframe 
               title="PDF preview" 
               src={selectedItem.fileUrl || "/sample.pdf"} 
