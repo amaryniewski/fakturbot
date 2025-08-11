@@ -67,6 +67,90 @@ export type Database = {
           },
         ]
       }
+      gmail_connections: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          refresh_token: string
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          refresh_token: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          refresh_token?: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          file_name: string
+          file_size: number | null
+          file_url: string | null
+          gmail_message_id: string | null
+          id: string
+          received_at: string
+          sender_email: string
+          status: string
+          subject: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          file_size?: number | null
+          file_url?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          received_at: string
+          sender_email: string
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_url?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          received_at?: string
+          sender_email?: string
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       mailbox_tokens: {
         Row: {
           access_token: string
