@@ -29,10 +29,20 @@ const AuthCallback = () => {
             toast({ title: "Błąd autoryzacji", description: error.message });
           }
         } else {
-          // Obsługa linków z hash (#access_token, #type=recovery)
-          const { error } = await (supabase.auth as any).getSessionFromUrl({ storeSession: true });
-          if (error) {
-            toast({ title: "Błąd autoryzacji", description: error.message });
+          // Obsługa linków z hash (#access_token, #refresh_token, #type=recovery)
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const access_token = hashParams.get("access_token");
+          const refresh_token = hashParams.get("refresh_token");
+          if (access_token && refresh_token) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) {
+              toast({ title: "Błąd autoryzacji", description: error.message });
+            } else {
+              // Usuń wrażliwe tokeny z paska adresu
+              window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+            }
+          } else {
+            toast({ title: "Błąd autoryzacji", description: "Brak tokenów sesji w adresie URL." });
           }
         }
       } catch (e: any) {
