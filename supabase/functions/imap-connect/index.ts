@@ -34,12 +34,15 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log('Creating Supabase client...');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    console.log('Parsing request body...');
     const { email, password, server, port, secure, testOnly }: ImapConnectionRequest & { testOnly?: boolean } = await req.json();
+    console.log('Request data:', { email, server, port, secure, testOnly });
 
     // Get the authenticated user
     const authHeader = req.headers.get('Authorization');
