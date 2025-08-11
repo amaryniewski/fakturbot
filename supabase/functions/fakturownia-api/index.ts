@@ -7,9 +7,10 @@ const corsHeaders = {
 };
 
 interface FakturowniaRequest {
-  action: 'test' | 'sync_invoices' | 'get_invoices' | 'create_invoice';
+  action: 'test' | 'connect' | 'sync_invoices' | 'get_invoices' | 'create_invoice';
   domain?: string;
   apiToken?: string;
+  companyName?: string;
   connectionId?: string;
   invoiceData?: any;
 }
@@ -41,7 +42,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Unauthorized');
     }
 
-    const { action, domain, apiToken, connectionId, invoiceData }: FakturowniaRequest = await req.json();
+    const { action, domain, apiToken, companyName, connectionId, invoiceData }: FakturowniaRequest = await req.json();
     console.log('Fakturownia API request:', { action, domain, connectionId });
 
     switch (action) {
@@ -63,6 +64,46 @@ const handler = async (req: Request): Promise<Response> => {
 
         return new Response(JSON.stringify({ 
           success: true, 
+          accountName: accountData.name 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'connect': {
+        if (!domain || !apiToken || !companyName) {
+          throw new Error('Domain, API token, and company name are required for connection');
+        }
+
+        // Test API connection first
+        const testUrl = `https://${domain}.fakturownia.pl/account.json?api_token=${apiToken}`;
+        const testResponse = await fetch(testUrl);
+        
+        if (!testResponse.ok) {
+          throw new Error('Invalid API token or domain');
+        }
+
+        const accountData = await testResponse.json();
+        console.log('Fakturownia connection test successful:', accountData.name);
+
+        // Store encrypted connection using service role
+        const { data: connectionId, error: dbError } = await supabaseClient
+          .rpc('insert_encrypted_fakturownia_connection', {
+            p_company_name: companyName,
+            p_domain: domain,
+            p_api_token: apiToken
+          });
+
+        if (dbError) {
+          console.error('Database error:', dbError);
+          throw new Error(`Failed to save connection: ${dbError.message}`);
+        }
+
+        console.log('Fakturownia connection saved successfully:', connectionId);
+
+        return new Response(JSON.stringify({ 
+          success: true, 
+          connectionId,
           accountName: accountData.name 
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

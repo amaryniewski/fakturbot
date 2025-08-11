@@ -43,32 +43,28 @@ export const useFakturowniaIntegration = () => {
   const connectFakturownia = async ({ companyName, domain, apiToken }: ConnectFakturowniaData) => {
     setLoading(true);
     try {
-      // Test API token first
-      const testResponse = await supabase.functions.invoke('fakturownia-api', {
+      // Use Edge Function to test and save connection securely
+      const { data, error } = await supabase.functions.invoke('fakturownia-api', {
         body: { 
-          action: 'test', 
+          action: 'connect', 
+          companyName,
           domain,
           apiToken 
         }
       });
 
-      if (testResponse.error) {
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Błąd połączenia z Edge Function');
+      }
+
+      if (!data.success) {
         throw new Error('Nieprawidłowy token API lub domena');
       }
 
-      // Store encrypted connection
-      const { data: connectionId, error: dbError } = await supabase
-        .rpc('insert_encrypted_fakturownia_connection', {
-          p_company_name: companyName,
-          p_domain: domain,
-          p_api_token: apiToken
-        });
-
-      if (dbError) throw dbError;
-
       toast({
         title: "Fakturownia połączona",
-        description: `Pomyślnie połączono z kontem: ${companyName}`,
+        description: `Pomyślnie połączono z kontem: ${data.accountName}`,
       });
 
       fetchConnections();
