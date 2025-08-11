@@ -1,16 +1,38 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
-import { Mail, Trash2 } from "lucide-react";
+import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
+import { Mail, Trash2, FileText, Plus, RefreshCw } from "lucide-react";
 
 const SettingsPage = () => {
   const { connections, loading, connectGmail, disconnectGmail } = useGmailIntegration();
+  const { 
+    connections: fakturowniaConnections, 
+    loading: fakturowniaLoading, 
+    connectFakturownia, 
+    disconnectFakturownia,
+    syncInvoices 
+  } = useFakturowniaIntegration();
+  
+  const [fakturowniaDialog, setFakturowniaDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    companyName: '',
+    domain: '',
+    apiToken: ''
+  });
   
   useEffect(() => { document.title = "FakturBot – Settings"; }, []);
+
+  const handleFakturowniaConnect = async () => {
+    await connectFakturownia(formData);
+    setFakturowniaDialog(false);
+    setFormData({ companyName: '', domain: '', apiToken: '' });
+  };
   
   return (
     <section className="space-y-6">
@@ -101,15 +123,136 @@ const SettingsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Integrations</CardTitle>
-          <CardDescription>Połącz systemy zewnętrzne.</CardDescription>
+          <CardDescription>Połącz systemy zewnętrzne do zarządzania fakturami.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between rounded-md border p-4">
-            <div>
-              <div className="font-medium">Fakturownia</div>
-              <div className="text-sm text-muted-foreground">Status: Connected</div>
+        <CardContent className="space-y-4">
+          {/* Fakturownia Integration */}
+          <div className="rounded-md border p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">Fakturownia</div>
+                  <div className="text-sm text-muted-foreground">
+                    System do wystawiania faktur online
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {fakturowniaConnections.length > 0 && (
+                  <Badge variant="secondary">{fakturowniaConnections.length} połączeń</Badge>
+                )}
+                <Dialog open={fakturowniaDialog} onOpenChange={setFakturowniaDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Dodaj konto
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Połącz z Fakturownia</DialogTitle>
+                      <DialogDescription>
+                        Wprowadź dane dostępu do swojego konta Fakturownia. API token znajdziesz w: 
+                        Ustawienia → Ustawienia konta → Integracja → Kod autoryzacyjny API
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="companyName">Nazwa firmy</Label>
+                        <Input
+                          id="companyName"
+                          placeholder="ACME Company"
+                          value={formData.companyName}
+                          onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="domain">Domena (bez .fakturownia.pl)</Label>
+                        <Input
+                          id="domain"
+                          placeholder="mojafirma"
+                          value={formData.domain}
+                          onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="apiToken">API Token</Label>
+                        <Input
+                          id="apiToken"
+                          type="password"
+                          placeholder="Wklej token API"
+                          value={formData.apiToken}
+                          onChange={(e) => setFormData(prev => ({ ...prev, apiToken: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setFakturowniaDialog(false)}
+                      >
+                        Anuluj
+                      </Button>
+                      <Button 
+                        onClick={handleFakturowniaConnect}
+                        disabled={!formData.companyName || !formData.domain || !formData.apiToken || fakturowniaLoading}
+                      >
+                        {fakturowniaLoading ? "Łączenie..." : "Połącz"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
-            <Button variant="outline">Disconnect</Button>
+            
+            {/* Connected Fakturownia accounts */}
+            {fakturowniaConnections.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <h4 className="text-sm font-medium">Połączone konta:</h4>
+                {fakturowniaConnections.map((connection) => (
+                  <div key={connection.id} className="flex items-center justify-between rounded-md border p-3">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{connection.company_name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {connection.domain}.fakturownia.pl • Połączono: {new Date(connection.created_at).toLocaleDateString('pl-PL')}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => syncInvoices(connection.id)}
+                        disabled={fakturowniaLoading}
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Synchronizuj
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => disconnectFakturownia(connection.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Usuń
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {fakturowniaConnections.length === 0 && (
+              <div className="mt-4 text-center py-6 text-muted-foreground">
+                <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Brak połączonych kont Fakturownia</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

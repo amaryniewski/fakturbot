@@ -1,0 +1,152 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+interface FakturowniaConnection {
+  id: string;
+  company_name: string;
+  domain: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface ConnectFakturowniaData {
+  companyName: string;
+  domain: string;
+  apiToken: string;
+}
+
+export const useFakturowniaIntegration = () => {
+  const [connections, setConnections] = useState<FakturowniaConnection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const fetchConnections = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('fakturownia_connections')
+        .select('id, company_name, domain, is_active, created_at')
+        .eq('is_active', true);
+
+      if (error) throw error;
+      setConnections(data || []);
+    } catch (error: any) {
+      console.error('Error fetching Fakturownia connections:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się pobrać połączeń z Fakturownia",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const connectFakturownia = async ({ companyName, domain, apiToken }: ConnectFakturowniaData) => {
+    setLoading(true);
+    try {
+      // Test API token first
+      const testResponse = await supabase.functions.invoke('fakturownia-api', {
+        body: { 
+          action: 'test', 
+          domain,
+          apiToken 
+        }
+      });
+
+      if (testResponse.error) {
+        throw new Error('Nieprawidłowy token API lub domena');
+      }
+
+      // Store encrypted connection
+      const { data: connectionId, error: dbError } = await supabase
+        .rpc('insert_encrypted_fakturownia_connection', {
+          p_company_name: companyName,
+          p_domain: domain,
+          p_api_token: apiToken
+        });
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "Fakturownia połączona",
+        description: `Pomyślnie połączono z kontem: ${companyName}`,
+      });
+
+      fetchConnections();
+    } catch (error: any) {
+      console.error('Error connecting Fakturownia:', error);
+      toast({
+        title: "Błąd połączenia",
+        description: error.message || "Nie udało się połączyć z Fakturownia",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const disconnectFakturownia = async (connectionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('fakturownia_connections')
+        .update({ is_active: false })
+        .eq('id', connectionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Rozłączono",
+        description: "Połączenie Fakturownia zostało usunięte",
+      });
+
+      fetchConnections();
+    } catch (error: any) {
+      console.error('Error disconnecting Fakturownia:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się rozłączyć Fakturownia",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const syncInvoices = async (connectionId: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fakturownia-api', {
+        body: { 
+          action: 'sync_invoices', 
+          connectionId 
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Synchronizacja zakończona",
+        description: `Zsynchronizowano ${data?.count || 0} faktur`,
+      });
+    } catch (error: any) {
+      console.error('Error syncing invoices:', error);
+      toast({
+        title: "Błąd synchronizacji",
+        description: error.message || "Nie udało się zsynchronizować faktur",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchConnections();
+  }, []);
+
+  return {
+    connections,
+    loading,
+    connectFakturownia,
+    disconnectFakturownia,
+    syncInvoices,
+    refreshConnections: fetchConnections,
+  };
+};

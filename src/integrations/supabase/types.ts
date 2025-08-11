@@ -67,6 +67,39 @@ export type Database = {
           },
         ]
       }
+      fakturownia_connections: {
+        Row: {
+          api_token: string
+          company_name: string
+          created_at: string
+          domain: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_token: string
+          company_name: string
+          created_at?: string
+          domain: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_token?: string
+          company_name?: string
+          created_at?: string
+          domain?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gmail_connections: {
         Row: {
           access_token: string | null
@@ -290,6 +323,14 @@ export type Database = {
         Args: { token_value: string }
         Returns: string
       }
+      get_decrypted_fakturownia_connection: {
+        Args: { p_connection_id: string }
+        Returns: {
+          company_name: string
+          domain: string
+          api_token: string
+        }[]
+      }
       get_decrypted_gmail_tokens: {
         Args: { p_connection_id: string }
         Returns: {
@@ -306,6 +347,10 @@ export type Database = {
           refresh_token: string
           expires_at: string
         }[]
+      }
+      insert_encrypted_fakturownia_connection: {
+        Args: { p_company_name: string; p_domain: string; p_api_token: string }
+        Returns: string
       }
       insert_encrypted_gmail_connection: {
         Args: {
