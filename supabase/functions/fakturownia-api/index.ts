@@ -260,8 +260,11 @@ const handler = async (req: Request): Promise<Response> => {
     }
   } catch (error: any) {
     console.error('Error in fakturownia-api function:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     return new Response(JSON.stringify({ 
-      error: error.message 
+      error: error.message,
+      details: error.stack 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
