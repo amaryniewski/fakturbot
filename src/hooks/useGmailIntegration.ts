@@ -43,14 +43,18 @@ export const useGmailIntegration = () => {
       if (error) throw error;
 
       if (data?.authUrl) {
-        // Open OAuth popup
+        // Open OAuth popup - standardowy SaaS flow
         const popup = window.open(
           data.authUrl,
           'gmail-oauth',
           'width=500,height=600,left=' + (window.screen.width / 2 - 250) + ',top=' + (window.screen.height / 2 - 300)
         );
 
-        // Listen for popup messages
+        if (!popup) {
+          throw new Error("Nie udało się otworzyć okna autoryzacji. Sprawdź blokadę popup'ów.");
+        }
+
+        // Listen for popup messages from OAuth callback
         const messageListener = (event: MessageEvent) => {
           if (event.origin !== window.location.origin) return;
           
@@ -59,8 +63,8 @@ export const useGmailIntegration = () => {
             window.removeEventListener('message', messageListener);
             
             toast({
-              title: "Sukces",
-              description: `Gmail połączony: ${event.data.email}`,
+              title: "Gmail połączony",
+              description: `Pomyślnie połączono konto: ${event.data.email}`,
             });
             
             fetchConnections();
@@ -70,7 +74,7 @@ export const useGmailIntegration = () => {
             window.removeEventListener('message', messageListener);
             
             toast({
-              title: "Błąd",
+              title: "Błąd autoryzacji",
               description: event.data.error || "Nie udało się połączyć z Gmail",
               variant: "destructive",
             });
@@ -80,7 +84,7 @@ export const useGmailIntegration = () => {
 
         window.addEventListener('message', messageListener);
 
-        // Handle popup closed manually
+        // Handle popup closed manually (user cancellation)
         const checkClosed = setInterval(() => {
           if (popup?.closed) {
             clearInterval(checkClosed);
@@ -93,7 +97,7 @@ export const useGmailIntegration = () => {
       console.error('Error connecting Gmail:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się rozpocząć autoryzacji Gmail",
+        description: error.message || "Nie udało się rozpocząć autoryzacji Gmail",
         variant: "destructive",
       });
       setLoading(false);
