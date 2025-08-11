@@ -86,7 +86,7 @@ const handler = async (req: Request): Promise<Response> => {
         const accountData = await testResponse.json();
         console.log('Fakturownia connection test successful:', accountData.name);
 
-        // Store encrypted connection using service role
+        // Store encrypted connection using service role with user context
         const { data: connectionId, error: dbError } = await supabaseClient
           .rpc('insert_encrypted_fakturownia_connection', {
             p_company_name: companyName,
@@ -95,7 +95,9 @@ const handler = async (req: Request): Promise<Response> => {
           });
 
         if (dbError) {
-          console.error('Database error:', dbError);
+          console.error('Database error details:', JSON.stringify(dbError, null, 2));
+          console.error('User ID:', user.id);
+          console.error('Function params:', { companyName, domain });
           throw new Error(`Failed to save connection: ${dbError.message}`);
         }
 
