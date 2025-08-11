@@ -79,12 +79,37 @@ const AuthCallback = () => {
       toast({ title: "Hasła nie są takie same", description: "Spróbuj ponownie." });
       return;
     }
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
-      toast({ title: "Błąd", description: error.message });
+    
+    // Pobierz email z aktualnej sesji
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) {
+      toast({ title: "Błąd", description: "Nie można pobrać adresu e-mail." });
       return;
     }
-    toast({ title: "Hasło ustawione", description: "Możesz kontynuować." });
+    
+    // Ustaw nowe hasło
+    const { error: updateError } = await supabase.auth.updateUser({ password });
+    if (updateError) {
+      toast({ title: "Błąd", description: updateError.message });
+      return;
+    }
+    
+    // Wyloguj się z tymczasowej sesji recovery
+    await supabase.auth.signOut();
+    
+    // Zaloguj się z nowym hasłem aby zakończyć proces
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: password
+    });
+    
+    if (signInError) {
+      toast({ title: "Błąd logowania", description: "Hasło zostało ustawione, ale nie udało się zalogować. Spróbuj zalogować się ręcznie." });
+      navigate("/login", { replace: true });
+      return;
+    }
+    
+    toast({ title: "Hasło ustawione", description: "Zostałeś zalogowany z nowym hasłem." });
     navigate("/app", { replace: true });
   };
 
