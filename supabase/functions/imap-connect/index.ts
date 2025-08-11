@@ -27,6 +27,8 @@ const IMAP_PROVIDERS = {
 };
 
 const handler = async (req: Request): Promise<Response> => {
+  console.log('IMAP Connect function called');
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
