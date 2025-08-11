@@ -7,11 +7,51 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LayoutDashboard, Loader2, Mail, AlertTriangle, History, Settings, Search, Keyboard, HelpCircle, ChevronDown, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 
 const AppLayout = () => {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const { user } = useAuthContext();
+  const [invoiceCounts, setInvoiceCounts] = useState({
+    total: 0,
+    processing: 0,
+    failed: 0
+  });
+
+  useEffect(() => {
+    const fetchInvoiceCounts = async () => {
+      try {
+        // Get total count
+        const { count: totalCount } = await supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true });
+
+        // Get processing count  
+        const { count: processingCount } = await supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'processing');
+
+        // Get failed count
+        const { count: failedCount } = await supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'failed');
+
+        setInvoiceCounts({
+          total: totalCount || 0,
+          processing: processingCount || 0,
+          failed: failedCount || 0
+        });
+      } catch (error) {
+        console.error('Error fetching invoice counts:', error);
+      }
+    };
+
+    fetchInvoiceCounts();
+  }, []);
 
   const onLogout = async () => {
     await signOut();
@@ -29,13 +69,16 @@ const AppLayout = () => {
         </div>
         <nav className="p-3 space-y-1">
           <Link to="/app" className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <LayoutDashboard className="h-4 w-4" /> Dashboard <Badge className="ml-auto">28</Badge>
+            <LayoutDashboard className="h-4 w-4" /> Dashboard 
+            {invoiceCounts.total > 0 && <Badge className="ml-auto">{invoiceCounts.total}</Badge>}
           </Link>
           <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <Loader2 className="h-4 w-4" /> Processing <Badge variant="secondary" className="ml-auto">5</Badge>
+            <Loader2 className="h-4 w-4" /> Processing 
+            {invoiceCounts.processing > 0 && <Badge variant="secondary" className="ml-auto">{invoiceCounts.processing}</Badge>}
           </button>
           <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <AlertTriangle className="h-4 w-4" /> Failed <Badge variant="destructive" className="ml-auto">3</Badge>
+            <AlertTriangle className="h-4 w-4" /> Failed 
+            {invoiceCounts.failed > 0 && <Badge variant="destructive" className="ml-auto">{invoiceCounts.failed}</Badge>}
           </button>
           <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
             <History className="h-4 w-4" /> History

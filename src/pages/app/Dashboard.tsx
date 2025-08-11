@@ -12,6 +12,7 @@ type Invoice = {
   sender_email: string;
   received_at: string;
   file_size: number | null;
+  file_url: string | null;
   status: string;
 };
 
@@ -22,6 +23,7 @@ type Item = {
   date: string;
   size: string;
   status: "New" | "Queued" | "Processing" | "Success" | "Failed";
+  fileUrl: string | null;
 };
 
 const formatFileSize = (bytes: number | null): string => {
@@ -105,7 +107,8 @@ const Dashboard = () => {
     sender: invoice.sender_email,
     date: formatDate(invoice.received_at),
     size: formatFileSize(invoice.file_size),
-    status: mapStatusToDisplay(invoice.status)
+    status: mapStatusToDisplay(invoice.status),
+    fileUrl: invoice.file_url
   }));
 
   const allSelected = selected.length === data.length;
@@ -182,7 +185,7 @@ const Dashboard = () => {
           </Table>
         </div>
         <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Showing {data.length} invoices (Company: ACME Company)</p>
+          <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
               {loading ? "Loading..." : "Refresh"}
@@ -204,7 +207,11 @@ const Dashboard = () => {
         ) : (
           <div className="flex-1 flex flex-col">
             <div className="h-12 border-b px-4 grid place-items-center text-sm">{selectedItem.file}</div>
-            <iframe title="PDF preview" src="/sample.pdf" className="flex-1 w-full" />
+            <iframe 
+              title="PDF preview" 
+              src={selectedItem.fileUrl || "/sample.pdf"} 
+              className="flex-1 w-full" 
+            />
           </div>
         )}
       </aside>
