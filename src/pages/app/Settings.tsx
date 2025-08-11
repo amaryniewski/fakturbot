@@ -6,11 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
+import { useImapIntegration } from "@/hooks/useImapIntegration";
 import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
-import { Mail, Trash2, FileText, Plus, RefreshCw } from "lucide-react";
+import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
   const { connections, loading, connectGmail, disconnectGmail } = useGmailIntegration();
+  const { 
+    connections: imapConnections, 
+    loading: imapLoading, 
+    connectImap, 
+    disconnectImap 
+  } = useImapIntegration();
   const { 
     connections: fakturowniaConnections, 
     loading: fakturowniaLoading, 
@@ -20,10 +27,18 @@ const SettingsPage = () => {
   } = useFakturowniaIntegration();
   
   const [fakturowniaDialog, setFakturowniaDialog] = useState(false);
+  const [imapDialog, setImapDialog] = useState(false);
   const [formData, setFormData] = useState({
     companyName: '',
     domain: '',
     apiToken: ''
+  });
+  const [imapFormData, setImapFormData] = useState({
+    email: '',
+    password: '',
+    server: '',
+    port: 993,
+    secure: true
   });
   
   useEffect(() => { document.title = "FakturBot – Settings"; }, []);
@@ -32,6 +47,12 @@ const SettingsPage = () => {
     await connectFakturownia(formData);
     setFakturowniaDialog(false);
     setFormData({ companyName: '', domain: '', apiToken: '' });
+  };
+
+  const handleImapConnect = async () => {
+    await connectImap(imapFormData);
+    setImapDialog(false);
+    setImapFormData({ email: '', password: '', server: '', port: 993, secure: true });
   };
   
   return (
@@ -43,56 +64,180 @@ const SettingsPage = () => {
           <CardTitle>Mailboxes</CardTitle>
           <CardDescription>Zarządzaj skrzynkami pocztowymi do automatycznego importu faktur.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Button 
-              onClick={connectGmail}
-              disabled={loading}
-              className="flex items-center gap-2"
-            >
-              <Mail className="h-4 w-4" />
-              {loading ? "Łączenie..." : "Connect Gmail"}
-            </Button>
-            {connections.length > 0 && (
-              <Badge variant="secondary">{connections.length} połączeń</Badge>
-            )}
-          </div>
+        <CardContent className="space-y-6">
+          {/* Gmail Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                <h4 className="font-medium">Gmail</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                {connections.length > 0 && (
+                  <Badge variant="secondary">{connections.length} połączeń</Badge>
+                )}
+                <Button 
+                  onClick={connectGmail}
+                  disabled={loading}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  {loading ? "Łączenie..." : "Połącz Gmail"}
+                </Button>
+              </div>
+            </div>
           
-          {connections.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Połączone konta:</h4>
-              {connections.map((connection) => (
-                <div key={connection.id} className="flex items-center justify-between rounded-md border p-3">
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium">{connection.email}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Połączono: {new Date(connection.created_at).toLocaleDateString('pl-PL')}
+            {connections.length > 0 && (
+              <div className="space-y-2">
+                {connections.map((connection) => (
+                  <div key={connection.id} className="flex items-center justify-between rounded-md border p-3">
+                    <div className="flex items-center gap-3">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{connection.email}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Gmail • Połączono: {new Date(connection.created_at).toLocaleDateString('pl-PL')}
+                        </div>
                       </div>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => disconnectGmail(connection.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Usuń
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => disconnectGmail(connection.id)}
-                    className="flex items-center gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Usuń
-                  </Button>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* IMAP Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Server className="h-5 w-5" />
+                <h4 className="font-medium">IMAP (inne skrzynki)</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                {imapConnections.length > 0 && (
+                  <Badge variant="secondary">{imapConnections.length} połączeń</Badge>
+                )}
+                <Dialog open={imapDialog} onOpenChange={setImapDialog}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      Połącz IMAP
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Połącz skrzynkę IMAP</DialogTitle>
+                      <DialogDescription>
+                        Wprowadź dane dostępu do swojej skrzynki pocztowej. Obsługujemy większość dostawców poczty.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="imap-email">Adres e-mail</Label>
+                        <Input
+                          id="imap-email"
+                          type="email"
+                          placeholder="twoj@email.com"
+                          value={imapFormData.email}
+                          onChange={(e) => setImapFormData(prev => ({ ...prev, email: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="imap-password">Hasło</Label>
+                        <Input
+                          id="imap-password"
+                          type="password"
+                          placeholder="Hasło do skrzynki"
+                          value={imapFormData.password}
+                          onChange={(e) => setImapFormData(prev => ({ ...prev, password: e.target.value }))}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="imap-server">Serwer IMAP</Label>
+                          <Input
+                            id="imap-server"
+                            placeholder="imap.gmail.com"
+                            value={imapFormData.server}
+                            onChange={(e) => setImapFormData(prev => ({ ...prev, server: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="imap-port">Port</Label>
+                          <Input
+                            id="imap-port"
+                            type="number"
+                            placeholder="993"
+                            value={imapFormData.port}
+                            onChange={(e) => setImapFormData(prev => ({ ...prev, port: parseInt(e.target.value) || 993 }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setImapDialog(false)}
+                      >
+                        Anuluj
+                      </Button>
+                      <Button 
+                        onClick={handleImapConnect}
+                        disabled={!imapFormData.email || !imapFormData.password || !imapFormData.server || imapLoading}
+                      >
+                        {imapLoading ? "Łączenie..." : "Połącz"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
-          )}
-          
-          {connections.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Brak połączonych kont Gmail</p>
-              <p className="text-sm">Połącz swoje konto, aby automatycznie importować faktury z e-maili</p>
-            </div>
-          )}
+
+            {imapConnections.length > 0 && (
+              <div className="space-y-2">
+                {imapConnections.map((connection) => (
+                  <div key={connection.id} className="flex items-center justify-between rounded-md border p-3">
+                    <div className="flex items-center gap-3">
+                      <Server className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{connection.email}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {connection.server}:{connection.port} • Połączono: {new Date(connection.created_at).toLocaleDateString('pl-PL')}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => disconnectImap(connection.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Usuń
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {connections.length === 0 && imapConnections.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Brak połączonych skrzynek pocztowych</p>
+                <p className="text-sm">Połącz Gmail lub skrzynkę IMAP, aby automatycznie importować faktury</p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
