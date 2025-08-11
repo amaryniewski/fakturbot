@@ -3,6 +3,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+type Invoice = {
+  id: string;
+  file_name: string;
+  sender_email: string;
+  received_at: string;
+  file_size: number | null;
+  status: string;
+};
 
 type Item = {
   id: string;
@@ -13,13 +24,30 @@ type Item = {
   status: "New" | "Queued" | "Processing" | "Success" | "Failed";
 };
 
-const data: Item[] = [
-  { id: "1", file: "2025-02-15_ACME.pdf", sender: "invoices@acme.com", date: "15 Feb 2025", size: "124 KB", status: "New" },
-  { id: "2", file: "Invoice_2025_03_XYZ.pdf", sender: "billing@xyz-corp.com", date: "10 Feb 2025", size: "256 KB", status: "Queued" },
-  { id: "3", file: "Utilities_Jan2025.pdf", sender: "support@utilities.co", date: "05 Feb 2025", size: "198 KB", status: "Processing" },
-  { id: "4", file: "Internet_Service_Feb.pdf", sender: "billing@isp.net", date: "02 Feb 2025", size: "145 KB", status: "Success" },
-  { id: "5", file: "Office_Supplies_Jan.pdf", sender: "orders@supplies.com", date: "28 Jan 2025", size: "312 KB", status: "Failed" },
-];
+const formatFileSize = (bytes: number | null): string => {
+  if (!bytes) return "Unknown";
+  const kb = Math.round(bytes / 1024);
+  return `${kb} KB`;
+};
+
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('pl-PL', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
+const mapStatusToDisplay = (status: string): Item["status"] => {
+  switch (status.toLowerCase()) {
+    case 'new': return 'New';
+    case 'queued': return 'Queued';
+    case 'processing': return 'Processing';
+    case 'success': return 'Success';
+    case 'failed': return 'Failed';
+    default: return 'New';
+  }
+};
 
 const statusBadge = (s: Item["status"]) => {
   switch (s) {
@@ -37,9 +65,49 @@ const statusBadge = (s: Item["status"]) => {
 };
 
 const Dashboard = () => {
-  useEffect(() => { document.title = "FakturBot – Dashboard"; }, []);
+  const { toast } = useToast();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  
+  useEffect(() => { document.title = "FakturBot – Dashboard"; }, []);
+
+  const fetchInvoices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .order('received_at', { ascending: false });
+
+      if (error) throw error;
+      setInvoices(data || []);
+    } catch (error: any) {
+      console.error('Error fetching invoices:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się pobrać faktur",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  // Convert invoices to display format
+  const data: Item[] = invoices.map(invoice => ({
+    id: invoice.id,
+    file: invoice.file_name,
+    sender: invoice.sender_email,
+    date: formatDate(invoice.received_at),
+    size: formatFileSize(invoice.file_size),
+    status: mapStatusToDisplay(invoice.status)
+  }));
+
   const allSelected = selected.length === data.length;
 
   const onToggleAll = (checked: boolean | string) => {
@@ -84,25 +152,41 @@ const Dashboard = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((row) => (
-                <TableRow key={row.id} className="cursor-pointer" onClick={() => setPreviewId(row.id)}>
-                  <TableCell>
-                    <Checkbox checked={selected.includes(row.id)} onCheckedChange={(v) => onToggle(row.id, v!)} aria-label={`Select ${row.file}`} />
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    Loading invoices...
                   </TableCell>
-                  <TableCell className="font-medium">{row.file}</TableCell>
-                  <TableCell>{row.sender}</TableCell>
-                  <TableCell>{row.date}</TableCell>
-                  <TableCell>{row.size}</TableCell>
-                  <TableCell>{statusBadge(row.status)}</TableCell>
                 </TableRow>
-              ))}
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    No invoices found. Try syncing with Fakturownia in Settings.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((row) => (
+                  <TableRow key={row.id} className="cursor-pointer" onClick={() => setPreviewId(row.id)}>
+                    <TableCell>
+                      <Checkbox checked={selected.includes(row.id)} onCheckedChange={(v) => onToggle(row.id, v!)} aria-label={`Select ${row.file}`} />
+                    </TableCell>
+                    <TableCell className="font-medium">{row.file}</TableCell>
+                    <TableCell>{row.sender}</TableCell>
+                    <TableCell>{row.date}</TableCell>
+                    <TableCell>{row.size}</TableCell>
+                    <TableCell>{statusBadge(row.status)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
         <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">Showing {data.length} invoices (Company: ACME Company)</p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => console.log("Refresh")}>Refresh</Button>
+            <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
+              {loading ? "Loading..." : "Refresh"}
+            </Button>
             <Button disabled={selected.length === 0} onClick={() => console.log("Approve", selected)}>Approve selected</Button>
           </div>
         </div>
