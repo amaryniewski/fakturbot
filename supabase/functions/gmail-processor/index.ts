@@ -47,16 +47,16 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Processing connection: ${connection.email}`);
       
       try {
-        // Get decrypted tokens for this connection using the correct function name
+        // Get decrypted tokens for this connection using the new function that includes user_id
         const { data: tokenData, error: tokenError } = await supabase
-          .rpc('get_decrypted_gmail_tokens', { p_connection_id: connection.id });
+          .rpc('get_decrypted_gmail_tokens_with_user', { p_connection_id: connection.id });
 
         if (tokenError || !tokenData?.[0]) {
           console.error(`Failed to get tokens for ${connection.email}:`, tokenError);
           continue;
         }
 
-        const { access_token, email } = tokenData[0];
+        const { access_token, email, user_id } = tokenData[0];
         
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -85,7 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
               .from('invoices')
               .select('id')
               .eq('gmail_message_id', message.id)
-              .eq('user_id', tokenData[0].user_id || connection.id) // Use user_id from token data
+              .eq('user_id', user_id)
               .single();
 
             if (existingInvoice) {
@@ -127,7 +127,7 @@ const handler = async (req: Request): Promise<Response> => {
                 const fileBuffer = Uint8Array.from(atob(attachmentData.data.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
                 // Upload to Supabase Storage
-                const fileName = `${connection.user_id}/${Date.now()}-${part.filename}`;
+                const fileName = `${user_id}/${Date.now()}-${part.filename}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                   .from('invoices')
                   .upload(fileName, fileBuffer, {
@@ -148,7 +148,7 @@ const handler = async (req: Request): Promise<Response> => {
                 const { error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: tokenData[0].user_id || connection.id, // Use user_id from token data
+                    user_id: user_id,
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -170,7 +170,7 @@ const handler = async (req: Request): Promise<Response> => {
                 
                 // Trigger OCR processing
                 await supabase.functions.invoke('ocr-processor', {
-                  body: { fileName, userId: tokenData[0].user_id || connection.id }
+                  body: { fileName, userId: user_id }
                 });
               }
             }

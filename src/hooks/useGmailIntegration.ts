@@ -142,6 +142,36 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const processGmailInvoices = async (fromDate?: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gmail-processor', {
+        body: { fromDate }
+      });
+
+      if (error) throw error;
+      
+      const result = data as { processedConnections: number; processedInvoices: number };
+      
+      toast({
+        title: "Przetwarzanie zakończone",
+        description: `Przetworzono ${result.processedInvoices || 0} faktur z ${result.processedConnections || 0} połączeń`,
+      });
+
+      return result;
+    } catch (error: any) {
+      console.error('Error processing Gmail invoices:', error);
+      toast({
+        title: "Błąd przetwarzania",
+        description: error.message || "Nie udało się przetworzyć faktur Gmail",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchConnections();
   }, []);
@@ -151,6 +181,7 @@ export const useGmailIntegration = () => {
     loading,
     connectGmail,
     disconnectGmail,
+    processGmailInvoices,
     refreshConnections: fetchConnections,
   };
 };

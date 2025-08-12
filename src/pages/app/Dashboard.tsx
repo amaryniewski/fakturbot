@@ -3,9 +3,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
+import { useGmailIntegration } from "@/hooks/useGmailIntegration";
 
 type Invoice = {
   id: string;
@@ -74,11 +77,18 @@ const statusBadge = (s: Item["status"]) => {
 
 const Dashboard = () => {
   const { toast } = useToast();
+  const { processGmailInvoices, loading: gmailLoading } = useGmailIntegration();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [fromDate, setFromDate] = useState(() => {
+    // Default to 7 days ago
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  });
   
   useEffect(() => { document.title = "FakturBot – Dashboard"; }, []);
 
@@ -106,23 +116,16 @@ const Dashboard = () => {
   const processGmailEmails = async () => {
     setProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('gmail-processor');
-      
-      if (error) throw error;
+      const result = await processGmailInvoices(fromDate);
       
       toast({
         title: "Sukces",
-        description: `Przetworzono ${data.processedInvoices} nowych faktur z Gmail`,
+        description: `Przetworzono ${result.processedInvoices} nowych faktur z Gmail`,
       });
       
       fetchInvoices();
     } catch (error: any) {
-      console.error('Error processing Gmail:', error);
-      toast({
-        title: "Błąd",
-        description: "Nie udało się przetworzyć emaili z Gmail",
-        variant: "destructive",
-      });
+      // Error handling is done in the hook
     } finally {
       setProcessing(false);
     }
@@ -230,12 +233,22 @@ const Dashboard = () => {
                   <TableCell colSpan={6} className="text-center text-muted-foreground">
                     <div className="py-8">
                       <p className="mb-4">Brak faktur z emaili. Połącz Gmail i rozpocznij automatyczne przetwarzanie.</p>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Label htmlFor="emptyFromDate" className="text-sm">Pobierz faktur od:</Label>
+                        <Input
+                          id="emptyFromDate"
+                          type="date"
+                          value={fromDate}
+                          onChange={(e) => setFromDate(e.target.value)}
+                          className="w-auto text-sm"
+                        />
+                      </div>
                       <Button 
                         onClick={processGmailEmails} 
-                        disabled={processing}
+                        disabled={processing || gmailLoading}
                         className="mx-auto"
                       >
-                        {processing ? "Przetwarzanie..." : "Sprawdź Gmail"}
+                        {processing || gmailLoading ? "Przetwarzanie..." : "Sprawdź Gmail"}
                       </Button>
                     </div>
                   </TableCell>
@@ -257,11 +270,21 @@ const Dashboard = () => {
             </TableBody>
           </Table>
         </div>
-        <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-between">
+        <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={processGmailEmails} disabled={processing}>
-              {processing ? "Przetwarzanie..." : "Sprawdź Gmail"}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="fromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
+              <Input
+                id="fromDate"
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-auto text-sm"
+              />
+            </div>
+            <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading}>
+              {processing || gmailLoading ? "Przetwarzanie..." : "Sprawdź Gmail"}
             </Button>
             <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
               {loading ? "Loading..." : "Refresh"}

@@ -448,6 +448,16 @@ export type Database = {
           token_expires_at: string
         }[]
       }
+      get_decrypted_gmail_tokens_with_user: {
+        Args: { p_connection_id: string }
+        Returns: {
+          access_token: string
+          refresh_token: string
+          email: string
+          token_expires_at: string
+          user_id: string
+        }[]
+      }
       get_decrypted_mailbox_tokens: {
         Args: { p_mailbox_id: string }
         Returns: {
