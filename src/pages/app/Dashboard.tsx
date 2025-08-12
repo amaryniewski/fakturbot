@@ -205,10 +205,10 @@ const Dashboard = () => {
   const selectedItem = useMemo(() => data.find((d) => d.id === previewId) ?? null, [previewId]);
 
   return (
-    <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4">
-      <article className="rounded-lg border bg-card shadow overflow-hidden flex flex-col">
+    <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4 h-[calc(100vh-120px)]">
+      <article className="rounded-lg border bg-card shadow overflow-hidden flex flex-col max-h-full">
         {/* Date filter and controls at the top */}
-        <div className="border-b bg-card p-3 flex items-center justify-between flex-wrap gap-2">
+        <div className="border-b bg-card p-3 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
             <Input
@@ -227,7 +227,7 @@ const Dashboard = () => {
           </div>
           <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
         </div>
-        <div className="overflow-auto">
+        <div className="overflow-auto flex-1 min-h-0">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
