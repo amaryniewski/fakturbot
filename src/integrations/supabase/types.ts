@@ -399,6 +399,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      audit_token_table_access: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          has_select_policy: boolean
+          token_columns_exposed: boolean
+          recommendation: string
+        }[]
+      }
       can_access_connection_tokens: {
         Args: { p_connection_id: string; p_table_name: string }
         Returns: boolean
