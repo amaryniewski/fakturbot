@@ -33,78 +33,76 @@ const handler = async (req: Request): Promise<Response> => {
     // Handle OAuth error from Google
     if (error) {
       console.error('OAuth error from Google:', error);
-      const errorHtml = `
-        <!DOCTYPE html>
-        <html lang="pl">
-          <head>
-            <title>Gmail OAuth - Błąd</title>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-              }
-              .container {
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(10px);
-                border-radius: 20px;
-                padding: 40px;
-                text-align: center;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-                max-width: 400px;
-                width: 90%;
-              }
-              .icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-                animation: shake 0.5s ease-in-out;
-              }
-              @keyframes shake {
-                0%, 100% { transform: translateX(0); }
-                25% { transform: translateX(-5px); }
-                75% { transform: translateX(5px); }
-              }
-              h1 {
-                font-size: 24px;
-                margin-bottom: 16px;
-                font-weight: 600;
-              }
-              p {
-                font-size: 16px;
-                opacity: 0.9;
-                line-height: 1.5;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="icon">❌</div>
-              <h1>Błąd autoryzacji</h1>
-              <p>Wystąpił błąd podczas łączenia z Gmail: ${error}</p>
-              <p style="font-size: 14px; margin-top: 20px;">To okno zostanie zamknięte automatycznie...</p>
-              <script>
-                window.opener?.postMessage({
-                  type: 'gmail-oauth-error',
-                  error: '${error}'
-                }, window.location.origin);
-                setTimeout(() => window.close(), 3000);
-              </script>
-            </div>
-          </body>
-        </html>
-      `;
+      const errorHtml = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gmail OAuth - Błąd</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 90%;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      animation: shake 0.5s ease-in-out;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    p {
+      font-size: 16px;
+      opacity: 0.9;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">❌</div>
+    <h1>Błąd autoryzacji</h1>
+    <p>Wystąpił błąd podczas łączenia z Gmail: ${error}</p>
+    <p style="font-size: 14px; margin-top: 20px;">To okno zostanie zamknięte automatycznie...</p>
+  </div>
+  <script>
+    window.opener?.postMessage({
+      type: 'gmail-oauth-error',
+      error: '${error}'
+    }, window.location.origin);
+    setTimeout(() => window.close(), 3000);
+  </script>
+</body>
+</html>`;
       return new Response(errorHtml, {
+        status: 400,
         headers: { 
-          "Content-Type": "text/html; charset=utf-8", 
-          ...corsHeaders 
+          "Content-Type": "text/html; charset=utf-8"
         },
       });
     }
@@ -188,192 +186,187 @@ const handler = async (req: Request): Promise<Response> => {
 
         console.log('Gmail connection stored with ID:', connectionData);
 
-        const successHtml = `
-          <!DOCTYPE html>
-          <html lang="pl">
-            <head>
-              <title>Gmail OAuth - Sukces</title>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                  min-height: 100vh;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: white;
-                }
-                .container {
-                  background: rgba(255, 255, 255, 0.1);
-                  backdrop-filter: blur(10px);
-                  border-radius: 20px;
-                  padding: 40px;
-                  text-align: center;
-                  border: 1px solid rgba(255, 255, 255, 0.2);
-                  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-                  max-width: 400px;
-                  width: 90%;
-                }
-                .icon {
-                  font-size: 64px;
-                  margin-bottom: 20px;
-                  animation: bounce 1s ease-in-out;
-                }
-                @keyframes bounce {
-                  0%, 100% { transform: translateY(0); }
-                  50% { transform: translateY(-10px); }
-                }
-                h1 {
-                  font-size: 24px;
-                  margin-bottom: 16px;
-                  font-weight: 600;
-                }
-                p {
-                  font-size: 16px;
-                  opacity: 0.9;
-                  line-height: 1.5;
-                  margin-bottom: 20px;
-                }
-                .email {
-                  background: rgba(255, 255, 255, 0.2);
-                  padding: 8px 16px;
-                  border-radius: 8px;
-                  font-weight: 500;
-                  margin: 16px 0;
-                }
-                .loading {
-                  display: inline-block;
-                  width: 20px;
-                  height: 20px;
-                  border: 2px solid rgba(255, 255, 255, 0.3);
-                  border-radius: 50%;
-                  border-top-color: white;
-                  animation: spin 1s ease-in-out infinite;
-                }
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="icon">✉️</div>
-                <h1>Gmail połączony pomyślnie!</h1>
-                <div class="email">${userInfo.email}</div>
-                <p>Twoje konto Gmail zostało pomyślnie połączone z FakturBot. Możesz teraz automatycznie importować faktury z swojej skrzynki pocztowej.</p>
-                <div class="loading"></div>
-                <p style="font-size: 14px; margin-top: 16px;">To okno zostanie zamknięte automatycznie...</p>
-                <script>
-                  window.opener?.postMessage({
-                    type: 'gmail-oauth-success',
-                    email: '${userInfo.email}'
-                  }, window.location.origin);
-                  setTimeout(() => window.close(), 2000);
-                </script>
-              </div>
-            </body>
-          </html>
-        `;
+        const successHtml = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gmail OAuth - Sukces</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 90%;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      animation: bounce 1s ease-in-out;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    p {
+      font-size: 16px;
+      opacity: 0.9;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .email {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      margin: 16px 0;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">✉️</div>
+    <h1>Gmail połączony pomyślnie!</h1>
+    <div class="email">${userInfo.email}</div>
+    <p>Twoje konto Gmail zostało pomyślnie połączone z FakturBot. Możesz teraz automatycznie importować faktury z swojej skrzynki pocztowej.</p>
+    <div class="loading"></div>
+    <p style="font-size: 14px; margin-top: 16px;">To okno zostanie zamknięte automatycznie...</p>
+  </div>
+  <script>
+    window.opener?.postMessage({
+      type: 'gmail-oauth-success',
+      email: '${userInfo.email}'
+    }, window.location.origin);
+    setTimeout(() => window.close(), 2000);
+  </script>
+</body>
+</html>`;
 
         return new Response(successHtml, {
+          status: 200,
           headers: { 
-            "Content-Type": "text/html; charset=utf-8",
-            ...corsHeaders 
+            "Content-Type": "text/html; charset=utf-8"
           },
         });
 
       } catch (error: any) {
         console.error('Error processing OAuth callback:', error);
         
-        const errorHtml = `
-          <!DOCTYPE html>
-          <html lang="pl">
-            <head>
-              <title>Gmail OAuth - Błąd</title>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-                  min-height: 100vh;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: white;
-                }
-                .container {
-                  background: rgba(255, 255, 255, 0.1);
-                  backdrop-filter: blur(10px);
-                  border-radius: 20px;
-                  padding: 40px;
-                  text-align: center;
-                  border: 1px solid rgba(255, 255, 255, 0.2);
-                  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-                  max-width: 400px;
-                  width: 90%;
-                }
-                .icon {
-                  font-size: 64px;
-                  margin-bottom: 20px;
-                  animation: shake 0.5s ease-in-out;
-                }
-                @keyframes shake {
-                  0%, 100% { transform: translateX(0); }
-                  25% { transform: translateX(-5px); }
-                  75% { transform: translateX(5px); }
-                }
-                h1 {
-                  font-size: 24px;
-                  margin-bottom: 16px;
-                  font-weight: 600;
-                }
-                p {
-                  font-size: 16px;
-                  opacity: 0.9;
-                  line-height: 1.5;
-                  margin-bottom: 12px;
-                }
-                .error-details {
-                  background: rgba(255, 255, 255, 0.2);
-                  padding: 12px;
-                  border-radius: 8px;
-                  font-family: monospace;
-                  font-size: 14px;
-                  margin: 16px 0;
-                  word-break: break-all;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="icon">⚠️</div>
-                <h1>Wystąpił błąd</h1>
-                <p>Nie udało się połączyć z Gmail. Spróbuj ponownie.</p>
-                <div class="error-details">${error.message}</div>
-                <p style="font-size: 14px;">To okno zostanie zamknięte automatycznie...</p>
-                <script>
-                  window.opener?.postMessage({
-                    type: 'gmail-oauth-error',
-                    error: '${error.message}'
-                  }, window.location.origin);
-                  setTimeout(() => window.close(), 4000);
-                </script>
-              </div>
-            </body>
-          </html>
-        `;
+        const errorHtml = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gmail OAuth - Błąd</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 90%;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      animation: shake 0.5s ease-in-out;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    p {
+      font-size: 16px;
+      opacity: 0.9;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .error-details {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 14px;
+      margin: 16px 0;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">⚠️</div>
+    <h1>Wystąpił błąd</h1>
+    <p>Nie udało się połączyć z Gmail. Spróbuj ponownie.</p>
+    <div class="error-details">${error.message}</div>
+    <p style="font-size: 14px;">To okno zostanie zamknięte automatycznie...</p>
+  </div>
+  <script>
+    window.opener?.postMessage({
+      type: 'gmail-oauth-error',
+      error: '${error.message}'
+    }, window.location.origin);
+    setTimeout(() => window.close(), 4000);
+  </script>
+</body>
+</html>`;
 
         return new Response(errorHtml, {
-          headers: { 
-            "Content-Type": "text/html; charset=utf-8", 
-            ...corsHeaders 
-          },
           status: 500,
+          headers: { 
+            "Content-Type": "text/html; charset=utf-8"
+          },
         });
       }
     }
