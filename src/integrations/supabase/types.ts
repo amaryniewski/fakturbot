@@ -466,6 +466,21 @@ export type Database = {
           token_expires_at: string
         }[]
       }
+      get_safe_mailbox_connections: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          provider: string
+          server: string
+          port: number
+          status: string
+          created_at: string
+          last_sync_at: string
+          company_id: string
+          has_tokens: boolean
+        }[]
+      }
       get_user_fakturownia_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -535,6 +550,10 @@ export type Database = {
       }
       revoke_connection: {
         Args: { p_connection_id: string; p_connection_type: string }
+        Returns: boolean
+      }
+      revoke_mailbox_tokens: {
+        Args: { p_mailbox_id: string }
         Returns: boolean
       }
       update_encrypted_gmail_tokens: {
