@@ -100,8 +100,8 @@ const handler = async (req: Request): Promise<Response> => {
         console.log('User info received:', { email: userInfo.email });
 
         // Store the connection in database using the user_id from state
-        // Use the RPC function but with service role to bypass auth.uid() check
-        const { data: connectionData, error: dbError } = await supabase.rpc('insert_encrypted_gmail_connection', {
+        const { data: connectionData, error: dbError } = await supabase.rpc('insert_encrypted_gmail_connection_for_user', {
+          p_user_id: state, // state contains user ID
           p_email: userInfo.email,
           p_access_token: tokens.access_token,
           p_refresh_token: tokens.refresh_token || '',
