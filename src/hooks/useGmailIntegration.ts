@@ -34,8 +34,18 @@ export const useGmailIntegration = () => {
   const connectGmail = async () => {
     setLoading(true);
     try {
+      // Get current session for authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Nie jesteś zalogowany');
+      }
+
       const { data, error } = await supabase.functions.invoke('gmail-oauth', {
-        body: { action: 'start' }
+        body: { action: 'start' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
       if (error) throw error;
