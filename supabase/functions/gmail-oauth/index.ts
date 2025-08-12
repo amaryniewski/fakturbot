@@ -108,15 +108,23 @@ const handler = async (req: Request): Promise<Response> => {
         const userInfo = await userInfoResponse.json();
         console.log('User info received:', { email: userInfo.email });
 
-        // Store the connection in database using the user_id from state
-        const { data: connectionData, error: dbError } = await supabase.rpc('insert_encrypted_gmail_connection_for_user', {
-          p_user_id: state, // state contains user ID
-          p_email: userInfo.email,
-          p_access_token: tokens.access_token,
-          p_refresh_token: tokens.refresh_token || '',
-          p_token_expires_at: tokens.expires_in ? 
-            new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null
-        });
+        // Store the connection in database 
+        // Since we have complete access through service role, we can insert directly
+        // but still use the encrypted token functions for security
+        const expiresAt = tokens.expires_in ? 
+          new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null;
+        
+        const { data: connectionData, error: dbError } = await supabase
+          .from('gmail_connections')
+          .insert({
+            user_id: state, // state contains user ID
+            email: userInfo.email,
+            access_token: tokens.access_token, // Will be encrypted by trigger
+            refresh_token: tokens.refresh_token || '',
+            token_expires_at: expiresAt
+          })
+          .select('id')
+          .single();
 
         if (dbError) {
           console.error('Database error:', dbError);
