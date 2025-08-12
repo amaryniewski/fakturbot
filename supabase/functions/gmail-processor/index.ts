@@ -28,13 +28,12 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    const { fromDate } = await req.json().catch(() => ({}));
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Get all active Gmail connections
+    // Get all active Gmail connections using the secure function
     const { data: connections, error: connectionsError } = await supabase
-      .from('gmail_connections')
-      .select('id, user_id, email')
-      .eq('is_active', true);
+      .rpc('get_safe_gmail_connections');
 
     if (connectionsError) {
       throw new Error(`Failed to fetch connections: ${connectionsError.message}`);
@@ -48,7 +47,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Processing connection: ${connection.email}`);
       
       try {
-        // Get decrypted tokens for this connection
+        // Get decrypted tokens for this connection using the correct function name
         const { data: tokenData, error: tokenError } = await supabase
           .rpc('get_decrypted_gmail_tokens', { p_connection_id: connection.id });
 
@@ -59,9 +58,9 @@ const handler = async (req: Request): Promise<Response> => {
 
         const { access_token, email } = tokenData[0];
         
-        // Search for emails with PDF attachments from last 7 days
-        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const query = `has:attachment after:${oneWeekAgo.toISOString().split('T')[0]} filename:pdf`;
+        // Use fromDate if provided, otherwise default to last 7 days
+        const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const query = `in:inbox has:attachment after:${searchFromDate.toISOString().split('T')[0]} filename:pdf`;
         
         const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`;
         
@@ -86,7 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
               .from('invoices')
               .select('id')
               .eq('gmail_message_id', message.id)
-              .eq('user_id', connection.user_id)
+              .eq('user_id', tokenData[0].user_id || connection.id) // Use user_id from token data
               .single();
 
             if (existingInvoice) {
@@ -149,7 +148,7 @@ const handler = async (req: Request): Promise<Response> => {
                 const { error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: connection.user_id,
+                    user_id: tokenData[0].user_id || connection.id, // Use user_id from token data
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -171,7 +170,7 @@ const handler = async (req: Request): Promise<Response> => {
                 
                 // Trigger OCR processing
                 await supabase.functions.invoke('ocr-processor', {
-                  body: { fileName, userId: connection.user_id }
+                  body: { fileName, userId: tokenData[0].user_id || connection.id }
                 });
               }
             }
