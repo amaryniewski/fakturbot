@@ -1,146 +1,43 @@
-import { Outlet, Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { useAuthContext } from "@/context/UserContext";
-import { Badge } from "@/components/ui/badge";
+import { Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, Loader2, Mail, AlertTriangle, History, Settings, Search, Keyboard, HelpCircle, ChevronDown, LogOut } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { Search, Keyboard, HelpCircle, Mail } from "lucide-react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 
 const AppLayout = () => {
-  const { signOut } = useAuth();
-  const navigate = useNavigate();
-  const { user } = useAuthContext();
-  const [invoiceCounts, setInvoiceCounts] = useState({
-    total: 0,
-    processing: 0,
-    failed: 0
-  });
-
-  useEffect(() => {
-    const fetchInvoiceCounts = async () => {
-      try {
-        // Get total count
-        const { count: totalCount } = await supabase
-          .from('invoices')
-          .select('*', { count: 'exact', head: true });
-
-        // Get processing count  
-        const { count: processingCount } = await supabase
-          .from('invoices')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'processing');
-
-        // Get failed count
-        const { count: failedCount } = await supabase
-          .from('invoices')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'failed');
-
-        setInvoiceCounts({
-          total: totalCount || 0,
-          processing: processingCount || 0,
-          failed: failedCount || 0
-        });
-      } catch (error) {
-        console.error('Error fetching invoice counts:', error);
-      }
-    };
-
-    fetchInvoiceCounts();
-  }, []);
-
-  const onLogout = async () => {
-    await signOut();
-    navigate("/login", { replace: true });
-  };
-
   return (
-    <div className="min-h-screen bg-muted/20 text-foreground">
-      <aside className="fixed left-0 top-0 h-full w-60 border-r bg-card">
-        <div className="p-4 border-b">
-          <Link to="/app" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-md bg-primary/10 grid place-items-center text-primary">FB</div>
-            <span className="font-bold">FakturBot</span>
-          </Link>
-        </div>
-        <nav className="p-3 space-y-1">
-          <Link to="/app" className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <LayoutDashboard className="h-4 w-4" /> Dashboard 
-            {invoiceCounts.total > 0 && <Badge className="ml-auto">{invoiceCounts.total}</Badge>}
-          </Link>
-          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <Loader2 className="h-4 w-4" /> Processing 
-            {invoiceCounts.processing > 0 && <Badge variant="secondary" className="ml-auto">{invoiceCounts.processing}</Badge>}
-          </button>
-          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <AlertTriangle className="h-4 w-4" /> Failed 
-            {invoiceCounts.failed > 0 && <Badge variant="destructive" className="ml-auto">{invoiceCounts.failed}</Badge>}
-          </button>
-          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <History className="h-4 w-4" /> History
-          </button>
-          <Link to="/app/settings" className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent">
-            <Settings className="h-4 w-4" /> Settings
-          </Link>
-        </nav>
-        <div className="absolute bottom-0 w-full p-3 border-t">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-md bg-muted" />
-            <div className="text-sm">
-              <div className="font-medium truncate">{user?.email ?? "Anna Kowalska"}</div>
-              <div className="text-muted-foreground truncate text-xs">ACME Company</div>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-muted/20 text-foreground">
+        <AppSidebar />
+        
+        <div className="flex-1 flex flex-col">
+          <header className="h-14 border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60 flex items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger />
+              <div className="relative">
+                <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+                <Input className="pl-8 w-72" placeholder="Szukaj faktur..." />
+              </div>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="secondary">All</Button>
+                <Button size="sm" variant="ghost"><Mail className="h-4 w-4 mr-1" />Gmail</Button>
+                <Button size="sm" variant="ghost">Outlook</Button>
+                <Button size="sm" variant="ghost">IMAP</Button>
+              </div>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="User menu">
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                align="start" 
-                side="top" 
-                sideOffset={8}
-                className="z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg min-w-[140px]"
-                forceMount
-              >
-                <DropdownMenuItem onClick={onLogout} className="cursor-pointer">
-                  <LogOut className="h-4 w-4 mr-2" /> Wyloguj
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </aside>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts"><Keyboard className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Help"><HelpCircle className="h-4 w-4" /></Button>
+            </div>
+          </header>
 
-      <div className="ml-60">
-        <header className="h-14 border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60 flex items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-8 w-72" placeholder="Szukaj faktur..." />
-            </div>
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant="secondary">All</Button>
-              <Button size="sm" variant="ghost"><Mail className="h-4 w-4 mr-1" />Gmail</Button>
-              <Button size="sm" variant="ghost">Outlook</Button>
-              <Button size="sm" variant="ghost">IMAP</Button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts"><Keyboard className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" aria-label="Help"><HelpCircle className="h-4 w-4" /></Button>
-          </div>
-        </header>
-
-        <main className="p-4">
-          <Outlet />
-        </main>
+          <main className="flex-1 p-4">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 };
 
