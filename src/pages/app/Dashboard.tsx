@@ -83,6 +83,7 @@ const Dashboard = () => {
   const [processing, setProcessing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [n8nWebhookUrl, setN8nWebhookUrl] = useState("");
   const [fromDate, setFromDate] = useState(() => {
     // Default to 7 days ago
     const date = new Date();
@@ -135,6 +136,7 @@ const Dashboard = () => {
     if (selected.length === 0) return;
     
     try {
+      // First, update the database to mark as approved
       const { error } = await supabase
         .from('invoices')
         .update({ 
@@ -146,10 +148,43 @@ const Dashboard = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Zatwierdzono",
-        description: `Zatwierdzono ${selected.length} faktur`,
-      });
+      // Then send to n8n webhook if URL is provided
+      if (n8nWebhookUrl.trim()) {
+        try {
+          const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
+            body: {
+              invoiceIds: selected,
+              webhookUrl: n8nWebhookUrl.trim()
+            }
+          });
+
+          if (webhookError) {
+            console.error('Webhook error:', webhookError);
+            toast({
+              title: "Ostrzeżenie",
+              description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message}`,
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Sukces",
+              description: `Zatwierdzono ${selected.length} faktur i wysłano do n8n`,
+            });
+          }
+        } catch (webhookError: any) {
+          console.error('Webhook error:', webhookError);
+          toast({
+            title: "Ostrzeżenie", 
+            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message}`,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Zatwierdzono",
+          description: `Zatwierdzono ${selected.length} faktur`,
+        });
+      }
 
       setSelected([]);
       fetchInvoices();
@@ -228,7 +263,18 @@ const Dashboard = () => {
             </div>
             <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
           </div>
-          <div className="flex items-center justify-end">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <Label htmlFor="n8nWebhook" className="text-sm whitespace-nowrap">n8n Webhook:</Label>
+              <Input
+                id="n8nWebhook"
+                type="url"
+                placeholder="https://your-n8n-instance.com/webhook/..."
+                value={n8nWebhookUrl}
+                onChange={(e) => setN8nWebhookUrl(e.target.value)}
+                className="text-sm"
+              />
+            </div>
             <Button disabled={selected.length === 0} onClick={approveSelected}>
               Zatwierdź wybrane ({selected.length})
             </Button>
