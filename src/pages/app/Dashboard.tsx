@@ -132,6 +132,7 @@ const Dashboard = () => {
   };
 
   const approveSelected = async () => {
+    console.log("approveSelected called with selected:", selected);
     if (selected.length === 0) return;
     
     try {
@@ -148,12 +149,14 @@ const Dashboard = () => {
       if (error) throw error;
 
       // Then send to n8n webhook
+      console.log("Calling send-to-n8n function...");
       try {
         const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
           body: {
             invoiceIds: selected
           }
         });
+        console.log("send-to-n8n response:", { data, webhookError });
 
         if (webhookError) {
           console.error('Webhook error:', webhookError);
