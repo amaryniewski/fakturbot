@@ -396,7 +396,66 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      safe_fakturownia_connections: {
+        Row: {
+          company_name: string | null
+          created_at: string | null
+          domain: string | null
+          id: string | null
+          is_active: boolean | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string | null
+          domain?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string | null
+          domain?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      safe_gmail_connections: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string | null
+          is_active: boolean | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       can_access_connection_tokens: {
@@ -528,6 +587,13 @@ export type Database = {
           p_expires_at?: string
         }
         Returns: boolean
+      }
+      validate_token_encryption: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          has_unencrypted_tokens: boolean
+        }[]
       }
     }
     Enums: {
