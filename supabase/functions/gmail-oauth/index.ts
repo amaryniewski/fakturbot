@@ -102,7 +102,10 @@ const handler = async (req: Request): Promise<Response> => {
         </html>
       `;
       return new Response(errorHtml, {
-        headers: { "Content-Type": "text/html", ...corsHeaders },
+        headers: { 
+          "Content-Type": "text/html; charset=utf-8", 
+          ...corsHeaders 
+        },
       });
     }
 
@@ -276,7 +279,10 @@ const handler = async (req: Request): Promise<Response> => {
         `;
 
         return new Response(successHtml, {
-          headers: { "Content-Type": "text/html", ...corsHeaders },
+          headers: { 
+            "Content-Type": "text/html; charset=utf-8",
+            ...corsHeaders 
+          },
         });
 
       } catch (error: any) {
@@ -363,7 +369,10 @@ const handler = async (req: Request): Promise<Response> => {
         `;
 
         return new Response(errorHtml, {
-          headers: { "Content-Type": "text/html", ...corsHeaders },
+          headers: { 
+            "Content-Type": "text/html; charset=utf-8", 
+            ...corsHeaders 
+          },
           status: 500,
         });
       }
