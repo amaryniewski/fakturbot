@@ -17,10 +17,16 @@ const handler = async (req: Request): Promise<Response> => {
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
-  console.log('Gmail OAuth callback received:', { code: !!code, state, error });
+  console.log('Request details:', { 
+    method: req.method, 
+    hasCode: !!code, 
+    hasState: !!state, 
+    hasError: !!error,
+    url: req.url
+  });
 
-  // Handle OAuth callback from Google (GET request - no auth required)
-  if (req.method === "GET" && (code || error)) {
+  // Handle all GET requests as OAuth callbacks (no auth required)
+  if (req.method === "GET") {
     // Handle OAuth error from Google
     if (error) {
       console.error('OAuth error from Google:', error);
