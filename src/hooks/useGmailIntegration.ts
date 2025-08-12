@@ -16,8 +16,8 @@ export const useGmailIntegration = () => {
 
   const fetchConnections = async () => {
     try {
-      // Use secure function that doesn't expose OAuth tokens
-      const { data, error } = await supabase.rpc('get_user_gmail_connections');
+      // Use the new secure function that provides safe access to connection metadata
+      const { data, error } = await supabase.rpc('get_safe_gmail_connections');
 
       if (error) throw error;
       setConnections(data || []);
@@ -114,13 +114,17 @@ export const useGmailIntegration = () => {
 
   const disconnectGmail = async (connectionId: string) => {
     try {
-      // Securely disable the connection by setting is_active to false
-      const { error } = await supabase
-        .from('gmail_connections')
-        .update({ is_active: false })
-        .eq('id', connectionId);
+      // Use the secure revoke function instead of direct database access
+      const { data: revoked, error } = await supabase.rpc('revoke_connection', {
+        p_connection_id: connectionId,
+        p_connection_type: 'gmail'
+      });
 
       if (error) throw error;
+      
+      if (!revoked) {
+        throw new Error('Nie udało się rozłączyć - sprawdź uprawnienia');
+      }
 
       toast({
         title: "Rozłączono",

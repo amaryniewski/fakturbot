@@ -396,66 +396,7 @@ export type Database = {
       }
     }
     Views: {
-      safe_fakturownia_connections: {
-        Row: {
-          company_name: string | null
-          created_at: string | null
-          domain: string | null
-          id: string | null
-          is_active: boolean | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          company_name?: string | null
-          created_at?: string | null
-          domain?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          company_name?: string | null
-          created_at?: string | null
-          domain?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      safe_gmail_connections: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          id: string | null
-          is_active: boolean | null
-          token_expires_at: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          token_expires_at?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          token_expires_at?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       can_access_connection_tokens: {
@@ -501,6 +442,28 @@ export type Database = {
           access_token: string
           refresh_token: string
           expires_at: string
+        }[]
+      }
+      get_safe_fakturownia_connections: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          company_name: string
+          domain: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }[]
+      }
+      get_safe_gmail_connections: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+          token_expires_at: string
         }[]
       }
       get_user_fakturownia_connections: {
@@ -569,6 +532,10 @@ export type Database = {
       log_token_access: {
         Args: { p_action: string; p_table_name: string; p_record_id: string }
         Returns: undefined
+      }
+      revoke_connection: {
+        Args: { p_connection_id: string; p_connection_type: string }
+        Returns: boolean
       }
       update_encrypted_gmail_tokens: {
         Args: {
