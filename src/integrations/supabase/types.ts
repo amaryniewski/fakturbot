@@ -524,6 +524,10 @@ export type Database = {
         }
         Returns: string
       }
+      insert_encrypted_fakturownia_connection_secure: {
+        Args: { p_company_name: string; p_domain: string; p_api_token: string }
+        Returns: string
+      }
       insert_encrypted_gmail_connection: {
         Args: {
           p_email: string
@@ -536,6 +540,15 @@ export type Database = {
       insert_encrypted_gmail_connection_for_user: {
         Args: {
           p_user_id: string
+          p_email: string
+          p_access_token: string
+          p_refresh_token: string
+          p_token_expires_at?: string
+        }
+        Returns: string
+      }
+      insert_encrypted_gmail_connection_secure: {
+        Args: {
           p_email: string
           p_access_token: string
           p_refresh_token: string
