@@ -207,6 +207,26 @@ const Dashboard = () => {
   return (
     <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4">
       <article className="rounded-lg border bg-card shadow overflow-hidden flex flex-col">
+        {/* Date filter and controls at the top */}
+        <div className="border-b bg-card p-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
+            <Input
+              id="topFromDate"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-auto text-sm"
+            />
+            <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading} size="sm">
+              {processing || gmailLoading ? "Przetwarzanie..." : "Sprawdź Gmail"}
+            </Button>
+            <Button variant="outline" onClick={fetchInvoices} disabled={loading} size="sm">
+              {loading ? "Loading..." : "Refresh"}
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
+        </div>
         <div className="overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
@@ -270,29 +290,10 @@ const Dashboard = () => {
             </TableBody>
           </Table>
         </div>
-        <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="fromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
-              <Input
-                id="fromDate"
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="w-auto text-sm"
-              />
-            </div>
-            <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading}>
-              {processing || gmailLoading ? "Przetwarzanie..." : "Sprawdź Gmail"}
-            </Button>
-            <Button variant="outline" onClick={fetchInvoices} disabled={loading}>
-              {loading ? "Loading..." : "Refresh"}
-            </Button>
-            <Button disabled={selected.length === 0} onClick={approveSelected}>
-              Zatwierdź wybrane
-            </Button>
-          </div>
+        <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-end">
+          <Button disabled={selected.length === 0} onClick={approveSelected}>
+            Zatwierdź wybrane
+          </Button>
         </div>
       </article>
 
