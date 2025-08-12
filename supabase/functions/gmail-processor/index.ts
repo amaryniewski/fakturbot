@@ -31,9 +31,9 @@ const handler = async (req: Request): Promise<Response> => {
     const { fromDate } = await req.json().catch(() => ({}));
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Get all active Gmail connections using the secure function
+    // Get all active Gmail connections - use service role to bypass RLS
     const { data: connections, error: connectionsError } = await supabase
-      .rpc('get_safe_gmail_connections');
+      .rpc('get_user_gmail_connections');
 
     if (connectionsError) {
       throw new Error(`Failed to fetch connections: ${connectionsError.message}`);
