@@ -29,17 +29,19 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const { fromDate } = await req.json().catch(() => ({}));
+    console.log('Gmail processor started with fromDate:', fromDate);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Get all active Gmail connections - use service role to bypass RLS
     const { data: connections, error: connectionsError } = await supabase
-      .rpc('get_user_gmail_connections');
+      .rpc('get_all_active_gmail_connections');
 
     if (connectionsError) {
+      console.error('Failed to fetch connections:', connectionsError);
       throw new Error(`Failed to fetch connections: ${connectionsError.message}`);
     }
 
-    console.log(`Processing ${connections?.length || 0} Gmail connections`);
+    console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => c.email));
     
     let totalProcessed = 0;
     

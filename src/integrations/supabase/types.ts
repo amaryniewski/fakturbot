@@ -431,6 +431,15 @@ export type Database = {
         Args: { token_value: string }
         Returns: string
       }
+      get_all_active_gmail_connections: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          user_id: string
+          created_at: string
+        }[]
+      }
       get_decrypted_fakturownia_connection: {
         Args: { p_connection_id: string }
         Returns: {

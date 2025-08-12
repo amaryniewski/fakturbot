@@ -143,11 +143,14 @@ export const useGmailIntegration = () => {
   };
 
   const processGmailInvoices = async (fromDate?: string) => {
+    console.log('🚀 Starting Gmail processing with date:', fromDate);
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('gmail-processor', {
         body: { fromDate }
       });
+
+      console.log('📨 Gmail processor response:', data, error);
 
       if (error) throw error;
       
