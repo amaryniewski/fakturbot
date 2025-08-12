@@ -366,6 +366,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_connection_tokens: {
+        Args: { p_connection_id: string; p_table_name: string }
+        Returns: boolean
+      }
       check_fakturownia_connection_exists: {
         Args: { p_domain: string }
         Returns: boolean
