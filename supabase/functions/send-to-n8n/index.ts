@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface SendToN8nRequest {
   invoiceIds: string[];
-  webhookUrl: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -17,14 +16,16 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { invoiceIds, webhookUrl }: SendToN8nRequest = await req.json();
+    const { invoiceIds }: SendToN8nRequest = await req.json();
     
     if (!invoiceIds || invoiceIds.length === 0) {
       throw new Error("No invoice IDs provided");
     }
 
+    // Get webhook URL from Supabase secrets
+    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
     if (!webhookUrl) {
-      throw new Error("No webhook URL provided");
+      throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
 
     const supabase = createClient(
