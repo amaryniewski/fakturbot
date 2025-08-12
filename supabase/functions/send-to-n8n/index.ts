@@ -16,7 +16,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log("send-to-n8n function called");
     const { invoiceIds }: SendToN8nRequest = await req.json();
+    console.log("Received invoiceIds:", invoiceIds);
     
     if (!invoiceIds || invoiceIds.length === 0) {
       throw new Error("No invoice IDs provided");
@@ -24,6 +26,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Get webhook URL from Supabase secrets
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
     if (!webhookUrl) {
       throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
@@ -96,6 +99,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   } catch (error: any) {
     console.error("Error in send-to-n8n function:", error);
+    console.error("Error stack:", error.stack);
     return new Response(
       JSON.stringify({ 
         error: error.message,
