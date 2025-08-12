@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.n8n-webhook]
 verify_jwt = false
+
+[functions.send-to-n8n]
+verify_jwt = false
