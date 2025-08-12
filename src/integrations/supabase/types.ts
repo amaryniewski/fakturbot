@@ -399,15 +399,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      audit_token_table_access: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          table_name: string
-          has_select_policy: boolean
-          token_columns_exposed: boolean
-          recommendation: string
-        }[]
-      }
       can_access_connection_tokens: {
         Args: { p_connection_id: string; p_table_name: string }
         Returns: boolean
@@ -419,6 +410,10 @@ export type Database = {
       check_gmail_connection_exists: {
         Args: { p_email: string }
         Returns: boolean
+      }
+      check_token_security: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       decrypt_token: {
         Args: { encrypted_value: string }
