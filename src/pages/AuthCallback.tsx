@@ -27,6 +27,15 @@ const AuthCallback = () => {
         const typeFromHash = hashParams.get("type");
         const isRecovery = type === "recovery" || typeFromHash === "recovery";
         
+        console.log("AuthCallback debug:", { 
+          type, 
+          typeFromHash, 
+          isRecovery, 
+          fullUrl: window.location.href,
+          hash: window.location.hash,
+          search: window.location.search 
+        });
+        
         const code = search.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
