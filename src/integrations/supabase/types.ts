@@ -565,6 +565,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_encrypted_mailbox_tokens_secure: {
+        Args: {
+          p_mailbox_id: string
+          p_access_token: string
+          p_refresh_token?: string
+          p_expires_at?: string
+        }
+        Returns: boolean
+      }
       is_member: {
         Args: { p_company_id: string }
         Returns: boolean
