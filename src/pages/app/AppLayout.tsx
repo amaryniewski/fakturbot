@@ -100,7 +100,7 @@ const AppLayout = () => {
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="top" className="z-50">
+              <DropdownMenuContent align="end" side="top" className="z-[9999] bg-white border shadow-lg min-w-[120px]">
                 <DropdownMenuItem onClick={onLogout}>
                   <LogOut className="h-4 w-4 mr-2" /> Wyloguj
                 </DropdownMenuItem>
