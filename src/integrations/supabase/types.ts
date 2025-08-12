@@ -419,6 +419,14 @@ export type Database = {
         Args: { encrypted_value: string }
         Returns: string
       }
+      encrypt_existing_tokens: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          tokens_encrypted: number
+          status: string
+        }[]
+      }
       encrypt_token: {
         Args: { token_value: string }
         Returns: string
@@ -577,6 +585,14 @@ export type Database = {
           p_expires_at?: string
         }
         Returns: boolean
+      }
+      validate_all_tokens_encrypted: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+          unencrypted_tokens: number
+          security_status: string
+        }[]
       }
       validate_token_encryption: {
         Args: Record<PropertyKey, never>
