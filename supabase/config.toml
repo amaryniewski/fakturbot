@@ -67,7 +67,7 @@ vector_port = 54328
 backend = "postgres"
 
 [functions.gmail-oauth]
-verify_jwt = true
+verify_jwt = false
 
 [functions.n8n-webhook]
 verify_jwt = false
