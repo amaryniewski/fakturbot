@@ -265,11 +265,13 @@ const handler = async (req: Request): Promise<Response> => {
     <p style="font-size: 14px; margin-top: 16px;">To okno zostanie zamknięte automatycznie...</p>
   </div>
   <script>
-    window.opener?.postMessage({
-      type: 'gmail-oauth-success',
-      email: '${userInfo.email}'
-    }, window.location.origin);
-    setTimeout(() => window.close(), 2000);
+    if (window.opener) {
+      window.opener.postMessage({
+        type: 'gmail-oauth-success',
+        email: '${userInfo.email}'
+      }, '*');
+    }
+    setTimeout(function() { window.close(); }, 2000);
   </script>
 </body>
 </html>`;
