@@ -208,24 +208,31 @@ const Dashboard = () => {
     <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4 h-[calc(100vh-120px)]">
       <article className="rounded-lg border bg-card shadow overflow-hidden flex flex-col max-h-full">
         {/* Date filter and controls at the top */}
-        <div className="border-b bg-card p-3 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
-            <Input
-              id="topFromDate"
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="w-auto text-sm"
-            />
-            <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading} size="sm">
-              {processing || gmailLoading ? "Przetwarzanie..." : "Sprawdź Gmail"}
-            </Button>
-            <Button variant="outline" onClick={fetchInvoices} disabled={loading} size="sm">
-              {loading ? "Loading..." : "Refresh"}
+        <div className="border-b bg-card p-3 space-y-3 flex-shrink-0">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
+              <Input
+                id="topFromDate"
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-auto text-sm"
+              />
+              <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading} size="sm">
+                {processing || gmailLoading ? "Przetwarzanie..." : "Sprawdź Gmail"}
+              </Button>
+              <Button variant="outline" onClick={fetchInvoices} disabled={loading} size="sm">
+                {loading ? "Loading..." : "Refresh"}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
+          </div>
+          <div className="flex items-center justify-end">
+            <Button disabled={selected.length === 0} onClick={approveSelected}>
+              Zatwierdź wybrane ({selected.length})
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
         </div>
         <div className="overflow-auto flex-1 min-h-0">
           <Table>
@@ -289,11 +296,6 @@ const Dashboard = () => {
               )}
             </TableBody>
           </Table>
-        </div>
-        <div className="sticky bottom-0 border-t bg-card/90 backdrop-blur p-3 flex items-center justify-end">
-          <Button disabled={selected.length === 0} onClick={approveSelected}>
-            Zatwierdź wybrane
-          </Button>
         </div>
       </article>
 

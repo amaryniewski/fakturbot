@@ -8,7 +8,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 const AppLayout = () => {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-muted/20 text-foreground">
+      <div className="min-h-screen flex w-full bg-muted/20 text-foreground pb-20">
         <AppSidebar />
         
         <div className="flex-1 flex flex-col">
