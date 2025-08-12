@@ -159,10 +159,12 @@ const Dashboard = () => {
         console.log("send-to-n8n response:", { data, webhookError });
 
         if (webhookError) {
-          console.error('Webhook error:', webhookError);
+          console.error('Webhook error details:', webhookError);
+          console.error('Webhook error type:', typeof webhookError);
+          console.error('Webhook error keys:', Object.keys(webhookError));
           toast({
             title: "Ostrzeżenie",
-            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message}`,
+            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${JSON.stringify(webhookError)}`,
             variant: "destructive",
           });
         } else {
@@ -172,10 +174,12 @@ const Dashboard = () => {
           });
         }
       } catch (webhookError: any) {
-        console.error('Webhook error:', webhookError);
+        console.error('Webhook error caught:', webhookError);
+        console.error('Webhook error message:', webhookError.message);
+        console.error('Webhook error stack:', webhookError.stack);
         toast({
           title: "Ostrzeżenie", 
-          description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message}`,
+          description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message || String(webhookError)}`,
           variant: "destructive",
         });
       }
