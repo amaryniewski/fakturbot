@@ -164,13 +164,13 @@ const Dashboard = () => {
           console.error('Webhook error keys:', Object.keys(webhookError));
           toast({
             title: "Ostrzeżenie",
-            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${JSON.stringify(webhookError)}`,
+            description: `Faktury zatwierdzono, ale wystąpił problem z dalszym przetwarzaniem.`,
             variant: "destructive",
           });
         } else {
           toast({
-            title: "Sukces",
-            description: `Zatwierdzono ${selected.length} faktur i wysłano do n8n`,
+            title: "Wysłano!",
+            description: `${selected.length} faktur zostało przesłanych do systemu księgowego. Przetwarzanie może potrwać kilka minut.`,
           });
         }
       } catch (webhookError: any) {
@@ -179,7 +179,7 @@ const Dashboard = () => {
         console.error('Webhook error stack:', webhookError.stack);
         toast({
           title: "Ostrzeżenie", 
-          description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message || String(webhookError)}`,
+          description: `Faktury zatwierdzono, ale wystąpił problem z dalszym przetwarzaniem.`,
           variant: "destructive",
         });
       }
