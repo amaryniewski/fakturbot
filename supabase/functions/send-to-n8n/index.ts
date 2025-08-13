@@ -71,21 +71,30 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Sending to n8n webhook:", webhookUrl);
     console.log("Payload:", JSON.stringify(n8nPayload, null, 2));
 
-    // Send to n8n webhook
+    // Send to n8n webhook with detailed logging
+    console.log("About to send POST request to:", webhookUrl);
+    
     const webhookResponse = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "User-Agent": "FakturBot/1.0",
       },
       body: JSON.stringify(n8nPayload),
     });
 
-    if (!webhookResponse.ok) {
-      throw new Error(`Webhook request failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
-    }
+    console.log("Webhook response status:", webhookResponse.status);
+    console.log("Webhook response statusText:", webhookResponse.statusText);
+    console.log("Webhook response headers:", Object.fromEntries(webhookResponse.headers.entries()));
 
     const webhookResult = await webhookResponse.text();
-    console.log("Webhook response:", webhookResult);
+    console.log("Webhook response body:", webhookResult);
+
+    if (!webhookResponse.ok) {
+      console.error("Webhook failed with status:", webhookResponse.status);
+      console.error("Response body:", webhookResult);
+      throw new Error(`Webhook request failed: ${webhookResponse.status} ${webhookResponse.statusText}. Response: ${webhookResult}`);
+    }
 
     return new Response(JSON.stringify({ 
       success: true,
