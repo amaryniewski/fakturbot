@@ -206,6 +206,8 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
+      <AutomationSettings />
+
       <InvoiceProcessingControls />
 
       <GmailFilterSettings />

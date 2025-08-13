@@ -138,16 +138,7 @@ const Dashboard = () => {
         description: `Przetworzono ${result.processedInvoices} nowych faktur z Gmail. OCR zostanie uruchomiony automatycznie.`,
       });
 
-      // Show OCR processing toast if invoices were processed
-      if (result.processedInvoices > 0) {
-        setTimeout(() => {
-          toast({
-            title: "🔄 OCR w toku",
-            description: "Przetwarzanie faktur rozpoczęte. Otrzymasz powiadomienie po zakończeniu.",
-            duration: 5000,
-          });
-        }, 1000);
-      }
+      // OCR notifications are now handled by real-time updates system
       
       fetchInvoices();
     } catch (error: any) {
