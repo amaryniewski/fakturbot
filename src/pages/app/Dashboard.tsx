@@ -425,15 +425,11 @@ const Dashboard = () => {
             
             <iframe 
               title="PDF preview" 
-              src={selectedItem.fileUrl || "/sample.pdf"} 
+              src={selectedItem.fileUrl || ""} 
               className="flex-1 w-full border-0" 
               style={{ minHeight: '500px' }}
               onError={(e) => {
                 console.error('PDF preview error:', e);
-                // Fallback to sample PDF if the file URL doesn't work
-                if (selectedItem.fileUrl) {
-                  (e.target as HTMLIFrameElement).src = "/sample.pdf";
-                }
               }}
             />
           </div>

@@ -207,24 +207,24 @@ const SettingsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Company</CardTitle>
-          <CardDescription>Dane firmy (placeholder).</CardDescription>
+          <CardDescription>Dane firmy - funkcjonalność w przygotowaniu.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label>Company name</Label>
-            <Input placeholder="ACME Company" />
+            <Input disabled />
           </div>
           <div className="space-y-2">
             <Label>NIP</Label>
-            <Input placeholder="123-456-78-90" />
+            <Input disabled />
           </div>
           <div className="space-y-2">
             <Label>Default currency</Label>
-            <Input placeholder="PLN" />
+            <Input disabled />
           </div>
         </CardContent>
         <CardFooter>
-          <Button variant="secondary" disabled>Zapisz (wkrótce)</Button>
+          <Button variant="secondary" disabled>Funkcja niedostępna</Button>
         </CardFooter>
       </Card>
 
@@ -270,7 +270,6 @@ const SettingsPage = () => {
                         <Label htmlFor="companyName">Nazwa firmy</Label>
                         <Input
                           id="companyName"
-                          placeholder="ACME Company"
                           value={formData.companyName}
                           onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
                         />
@@ -279,7 +278,6 @@ const SettingsPage = () => {
                         <Label htmlFor="domain">Domena (bez .fakturownia.pl)</Label>
                         <Input
                           id="domain"
-                          placeholder="mojafirma"
                           value={formData.domain}
                           onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value }))}
                         />
@@ -289,7 +287,6 @@ const SettingsPage = () => {
                         <Input
                           id="apiToken"
                           type="password"
-                          placeholder="Wklej token API"
                           value={formData.apiToken}
                           onChange={(e) => setFormData(prev => ({ ...prev, apiToken: e.target.value }))}
                         />

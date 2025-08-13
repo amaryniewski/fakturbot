@@ -185,8 +185,8 @@ export function AppSidebar() {
           {!collapsed && (
             <>
               <div className="text-sm flex-1">
-                <div className="font-medium truncate">{user?.email ?? "Anna Kowalska"}</div>
-                <div className="text-muted-foreground truncate text-xs">ACME Company</div>
+                <div className="font-medium truncate">{user?.email ?? "Użytkownik"}</div>
+                <div className="text-muted-foreground truncate text-xs">FakturBot</div>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
