@@ -4,7 +4,7 @@ import { useAuthContext } from "@/context/UserContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, Loader2, AlertTriangle, History, Settings, ChevronDown, LogOut } from "lucide-react";
+import { LayoutDashboard, Loader2, AlertTriangle, History, Settings, ChevronDown, LogOut, Code } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import {
@@ -65,6 +65,26 @@ export function AppSidebar() {
     };
 
     fetchInvoiceCounts();
+
+    // Real-time subscription for invoice count updates
+    const channel = supabase
+      .channel('invoice-counts-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invoices'
+        },
+        () => {
+          fetchInvoiceCounts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const onLogout = async () => {
@@ -101,6 +121,11 @@ export function AppSidebar() {
       title: "History", 
       url: "/app/history", 
       icon: History
+    },
+    { 
+      title: "Sparsowane dane", 
+      url: "/app/parsed-data", 
+      icon: Code
     },
     { 
       title: "Settings", 

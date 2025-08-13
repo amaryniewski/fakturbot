@@ -209,6 +209,57 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchInvoices();
+
+    // Real-time subscription for invoice status changes
+    const channel = supabase
+      .channel('dashboard-invoice-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invoices'
+        },
+        (payload) => {
+          console.log('Invoice change detected:', payload);
+          
+          // Show toast notifications for status changes
+          if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+            const fileName = payload.new.file_name;
+            const newStatus = payload.new.status;
+            
+            switch (newStatus) {
+              case 'processing':
+                toast({
+                  title: "Przetwarzanie rozpoczęte",
+                  description: `Faktura ${fileName} jest teraz przetwarzana`,
+                });
+                break;
+              case 'success':
+                toast({
+                  title: "Przetwarzanie zakończone",
+                  description: `Faktura ${fileName} została pomyślnie przetworzona`,
+                });
+                break;
+              case 'failed':
+                toast({
+                  title: "Błąd przetwarzania",
+                  description: `Faktura ${fileName} nie mogła zostać przetworzona`,
+                  variant: "destructive",
+                });
+                break;
+            }
+          }
+          
+          // Refresh the invoice list
+          fetchInvoices();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Convert invoices to display format
