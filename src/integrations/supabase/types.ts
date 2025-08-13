@@ -526,6 +526,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_automation_settings: {
+        Row: {
+          auto_import_emails: boolean
+          auto_send_to_accounting: boolean
+          auto_send_to_ocr: boolean
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_import_emails?: boolean
+          auto_send_to_accounting?: boolean
+          auto_send_to_ocr?: boolean
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_import_emails?: boolean
+          auto_send_to_accounting?: boolean
+          auto_send_to_ocr?: boolean
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-interface CompanySettings {
-  company_id: string;
+interface UserAutomationSettings {
+  user_id: string;
   auto_import_emails: boolean;
   auto_send_to_ocr: boolean;
   auto_send_to_accounting: boolean;
@@ -11,7 +11,7 @@ interface CompanySettings {
 }
 
 export const useCompanySettings = () => {
-  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [settings, setSettings] = useState<UserAutomationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -19,16 +19,9 @@ export const useCompanySettings = () => {
     try {
       setLoading(true);
       
-      // First, ensure user has membership in default company
-      await supabase.rpc('create_default_membership');
-      
-      // Use the default company ID
-      const mockCompanyId = "00000000-0000-0000-0000-000000000000";
-      
       const { data, error } = await supabase
-        .from("company_settings")
+        .from("user_automation_settings")
         .select("*")
-        .eq("company_id", mockCompanyId)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -39,16 +32,14 @@ export const useCompanySettings = () => {
         setSettings(data);
       } else {
         // Create default settings if they don't exist
-        const defaultSettings = {
-          company_id: mockCompanyId,
-          auto_import_emails: false,
-          auto_send_to_ocr: false,
-          auto_send_to_accounting: false,
-        };
-
         const { data: newSettings, error: insertError } = await supabase
-          .from("company_settings")
-          .insert(defaultSettings)
+          .from("user_automation_settings")
+          .insert({
+            user_id: (await supabase.auth.getUser()).data.user?.id,
+            auto_import_emails: false,
+            auto_send_to_ocr: false,
+            auto_send_to_accounting: false,
+          })
           .select()
           .single();
 
@@ -56,7 +47,7 @@ export const useCompanySettings = () => {
         setSettings(newSettings);
       }
     } catch (error: any) {
-      console.error("Error fetching company settings:", error);
+      console.error("Error fetching automation settings:", error);
       toast({
         title: "Błąd",
         description: "Nie można załadować ustawień automatyzacji.",
@@ -67,14 +58,14 @@ export const useCompanySettings = () => {
     }
   };
 
-  const updateSettings = async (updates: Partial<Pick<CompanySettings, 'auto_import_emails' | 'auto_send_to_ocr' | 'auto_send_to_accounting'>>) => {
+  const updateSettings = async (updates: Partial<Pick<UserAutomationSettings, 'auto_import_emails' | 'auto_send_to_ocr' | 'auto_send_to_accounting'>>) => {
     if (!settings) return;
 
     try {
       const { data, error } = await supabase
-        .from("company_settings")
+        .from("user_automation_settings")
         .update(updates)
-        .eq("company_id", settings.company_id)
+        .eq("user_id", settings.user_id)
         .select()
         .single();
 
@@ -86,7 +77,7 @@ export const useCompanySettings = () => {
         description: "Ustawienia automatyzacji zostały zaktualizowane.",
       });
     } catch (error: any) {
-      console.error("Error updating company settings:", error);
+      console.error("Error updating automation settings:", error);
       toast({
         title: "Błąd",
         description: "Nie można zapisać ustawień automatyzacji.",

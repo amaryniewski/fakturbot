@@ -32,14 +32,14 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Check if OCR should be auto-triggered based on company settings
-    const { data: companySettings } = await supabase
-      .from('company_settings')
+    // Check if OCR should be auto-triggered based on user settings
+    const { data: userSettings } = await supabase
+      .from('user_automation_settings')
       .select('auto_send_to_ocr')
       .eq('auto_import_emails', true)
       .single();
     
-    const shouldAutoOCR = companySettings?.auto_send_to_ocr || false;
+    const shouldAutoOCR = userSettings?.auto_send_to_ocr || false;
     
     // Get all active Gmail connections - use service role to bypass RLS
     const { data: connections, error: connectionsError } = await supabase
