@@ -9,7 +9,7 @@ const corsHeaders = {
 interface ComparisonResult {
   field: string;
   ocrSpaceValue: any;
-  googleAiValue: any;
+  claudeVisionValue: any;
   match: boolean;
   confidence: number;
   finalValue: any;
@@ -123,7 +123,7 @@ function compareFields(field: string, value1: any, value2: any, confidence1: num
     return {
       field,
       ocrSpaceValue: value1,
-      googleAiValue: value2,
+      claudeVisionValue: value2,
       match: true,
       confidence: 1,
       finalValue: null,
@@ -135,11 +135,11 @@ function compareFields(field: string, value1: any, value2: any, confidence1: num
     return {
       field,
       ocrSpaceValue: value1,
-      googleAiValue: value2,
+      claudeVisionValue: value2,
       match: false,
       confidence: confidence2,
       finalValue: value2,
-      reason: 'Only Google AI provided value'
+      reason: 'Only Claude Vision provided value'
     };
   }
   
@@ -147,7 +147,7 @@ function compareFields(field: string, value1: any, value2: any, confidence1: num
     return {
       field,
       ocrSpaceValue: value1,
-      googleAiValue: value2,
+      claudeVisionValue: value2,
       match: false,
       confidence: confidence1,
       finalValue: value1,
@@ -195,14 +195,14 @@ function compareFields(field: string, value1: any, value2: any, confidence1: num
       reason = `OCR.space confidence higher (${(confidence1 * 100).toFixed(1)}% vs ${(confidence2 * 100).toFixed(1)}%)`;
     } else {
       finalValue = value2;
-      reason = `Google AI confidence higher (${(confidence2 * 100).toFixed(1)}% vs ${(confidence1 * 100).toFixed(1)}%)`;
+      reason = `Claude Vision confidence higher (${(confidence2 * 100).toFixed(1)}% vs ${(confidence1 * 100).toFixed(1)}%)`;
     }
   }
   
   return {
     field,
     ocrSpaceValue: value1,
-    googleAiValue: value2,
+    claudeVisionValue: value2,
     match,
     confidence: fieldConfidence,
     finalValue,
@@ -262,38 +262,38 @@ serve(async (req) => {
     }
 
     const ocrSpaceResult = ocrResults?.find(r => r.provider === 'ocr_space');
-    const googleAiResult = ocrResults?.find(r => r.provider === 'google_document_ai');
+    const claudeVisionResult = ocrResults?.find(r => r.provider === 'claude_vision');
 
-    if (!ocrSpaceResult && !googleAiResult) {
+    if (!ocrSpaceResult && !claudeVisionResult) {
       throw new Error('No successful OCR results found for comparison');
     }
 
     if (!ocrSpaceResult) {
-      console.log('Only Google AI result available, using it directly');
-      // Update invoice with Google AI data
+      console.log('Only Claude Vision result available, using it directly');
+      // Update invoice with Claude Vision data
       await supabase
         .from('invoices')
         .update({
-          extracted_data: googleAiResult.structured_data,
-          confidence_score: googleAiResult.confidence_score,
+          extracted_data: claudeVisionResult.structured_data,
+          confidence_score: claudeVisionResult.confidence_score,
           status: 'success',
-          needs_review: googleAiResult.confidence_score < 0.8
+          needs_review: claudeVisionResult.confidence_score < 0.8
         })
         .eq('id', invoiceId);
 
       return new Response(
         JSON.stringify({
           success: true,
-          provider: 'google_document_ai_only',
-          finalData: googleAiResult.structured_data,
-          confidence: googleAiResult.confidence_score,
-          needsReview: googleAiResult.confidence_score < 0.8
+          provider: 'claude_vision_only',
+          finalData: claudeVisionResult.structured_data,
+          confidence: claudeVisionResult.confidence_score,
+          needsReview: claudeVisionResult.confidence_score < 0.8
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!googleAiResult) {
+    if (!claudeVisionResult) {
       console.log('Only OCR.space result available, using it directly');
       // Update invoice with OCR.space data
       await supabase
@@ -320,7 +320,7 @@ serve(async (req) => {
 
     // Both results available - perform comparison
     const ocrSpaceData = ocrSpaceResult.structured_data as InvoiceData;
-    const googleAiData = googleAiResult.structured_data as InvoiceData;
+    const claudeVisionData = claudeVisionResult.structured_data as InvoiceData;
     
     const comparisons: ComparisonResult[] = [];
     const finalData: InvoiceData = {};
@@ -332,9 +332,9 @@ serve(async (req) => {
       const comparison = compareFields(
         field,
         ocrSpaceData[field as keyof InvoiceData],
-        googleAiData[field as keyof InvoiceData],
+        claudeVisionData[field as keyof InvoiceData],
         ocrSpaceResult.confidence_score,
-        googleAiResult.confidence_score
+        claudeVisionResult.confidence_score
       );
       
       comparisons.push(comparison);
@@ -345,7 +345,7 @@ serve(async (req) => {
 
     // Calculate overall confidence
     const matchingFields = comparisons.filter(c => c.match).length;
-    const totalFields = comparisons.filter(c => c.ocrSpaceValue || c.googleAiValue).length;
+    const totalFields = comparisons.filter(c => c.ocrSpaceValue || c.claudeVisionValue).length;
     const agreementRate = totalFields > 0 ? matchingFields / totalFields : 0;
     
     const avgConfidence = comparisons
@@ -361,7 +361,7 @@ serve(async (req) => {
       .insert({
         invoice_id: invoiceId,
         ocr_space_result_id: ocrSpaceResult.id,
-        google_ai_result_id: googleAiResult.id,
+        claude_vision_result_id: claudeVisionResult.id,
         comparison_data: comparisons,
         final_decision: finalData,
         confidence_score: finalConfidence,

@@ -84,7 +84,7 @@ verify_jwt = false
 [functions.ocr-space]
 verify_jwt = false
 
-[functions.google-document-ai]
+[functions.claude-vision-ocr]
 verify_jwt = false
 
 [functions.ocr-compare]
