@@ -45,11 +45,16 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => c.email));
     
-        let totalProcessed = 0;
-        let skippedDuplicates = 0;
+    let totalProcessedGlobal = 0;
+    let skippedDuplicatesGlobal = 0;
     
     for (const connection of connections || []) {
       console.log(`Processing connection: ${connection.email}`);
+      
+      // Reset counters for each user
+      let totalProcessed = 0;
+      let skippedDuplicates = 0;
+      let processedMessagesThisUser = 0;
       
       try {
         // Get decrypted tokens for this connection using the new function that includes user_id
@@ -148,6 +153,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`Found ${messages.length} potential invoice emails for ${email}`);
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
+          let messageHasValidAttachments = false; // Track if this message has valid PDF attachments
           try {
             // SECURITY CHECK: Verify this connection belongs to the current user_id
             const { data: connectionVerification } = await supabase
@@ -173,6 +179,7 @@ const handler = async (req: Request): Promise<Response> => {
             if (existingInvoice) {
               console.log(`Message ${message.id} already processed, skipping`);
               skippedDuplicates++;
+              skippedDuplicatesGlobal++;
               continue;
             }
 
@@ -260,6 +267,7 @@ const handler = async (req: Request): Promise<Response> => {
                   if (invoiceError.code === '23505' && invoiceError.message.includes('unique_user_message_attachment')) {
                     console.log(`Duplicate invoice detected for message ${message.id}, skipping`);
                     skippedDuplicates++;
+                    skippedDuplicatesGlobal++;
                     continue;
                   }
                   // SECURITY LOG
@@ -272,6 +280,8 @@ const handler = async (req: Request): Promise<Response> => {
                 }
 
                 totalProcessed++;
+                totalProcessedGlobal++;
+                messageHasValidAttachments = true; // Mark this message as having valid attachments
                 console.log(`Processed invoice: ${part.filename} from ${senderEmail} (user: ${user_id})`);
                 
                 // Auto-trigger OCR if enabled for THIS USER - use Supabase OCR instead of N8N
@@ -299,22 +309,30 @@ const handler = async (req: Request): Promise<Response> => {
           } catch (messageError) {
             console.error(`Error processing message ${message.id}:`, messageError);
             continue;
+          } finally {
+            // Count processed messages (unique emails with valid attachments) for this user
+            if (messageHasValidAttachments) {
+              processedMessagesThisUser++;
+            }
           }
         }
+        
+        console.log(`User ${user_id} (${email}): processed ${processedMessagesThisUser} unique messages with ${totalProcessed} total attachments`);
       } catch (connectionError) {
         console.error(`Error processing connection ${connection.email}:`, connectionError);
         continue;
       }
     }
 
-    console.log(`Gmail processing completed: ${totalProcessed} new invoices, ${skippedDuplicates} duplicates skipped`);
+    console.log(`Gmail processing completed: ${totalProcessedGlobal} new invoices, ${skippedDuplicatesGlobal} duplicates skipped`);
+    console.log(`FINAL RESULT - processedInvoices: ${totalProcessedGlobal}, skippedDuplicates: ${skippedDuplicatesGlobal}, processedConnections: ${connections?.length || 0}`);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         processedConnections: connections?.length || 0,
-        processedInvoices: totalProcessed,
-        skippedDuplicates: skippedDuplicates
+        processedInvoices: totalProcessedGlobal,
+        skippedDuplicates: skippedDuplicatesGlobal
       }),
       { headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
