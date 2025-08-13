@@ -99,12 +99,21 @@ const Dashboard = () => {
 
   const fetchInvoices = async () => {
     try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('User not authenticated');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
+        .eq('user_id', user.id)
         .order('received_at', { ascending: false });
 
       if (error) throw error;
+      console.log('Fetched invoices:', data?.length);
       setInvoices(data || []);
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
