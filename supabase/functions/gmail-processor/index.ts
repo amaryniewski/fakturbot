@@ -58,7 +58,48 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        const { access_token, email, user_id } = tokenData[0];
+        const { access_token, refresh_token, email, user_id, token_expires_at } = tokenData[0];
+        
+        // Check if token is expired and refresh if needed
+        let currentAccessToken = access_token;
+        if (token_expires_at && new Date(token_expires_at) <= new Date()) {
+          console.log(`Token expired for ${email}, refreshing...`);
+          
+          try {
+            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: Deno.env.get('GOOGLE_CLIENT_ID')!,
+                client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET')!,
+                refresh_token: refresh_token,
+                grant_type: 'refresh_token'
+              })
+            });
+
+            if (!refreshResponse.ok) {
+              console.error(`Failed to refresh token for ${email}:`, await refreshResponse.text());
+              continue;
+            }
+
+            const refreshData = await refreshResponse.json();
+            currentAccessToken = refreshData.access_token;
+            
+            // Update tokens in database
+            const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000));
+            await supabase.rpc('update_encrypted_gmail_tokens', {
+              p_connection_id: connection.id,
+              p_access_token: currentAccessToken,
+              p_refresh_token: refreshData.refresh_token || refresh_token,
+              p_token_expires_at: newExpiresAt.toISOString()
+            });
+            
+            console.log(`Token refreshed successfully for ${email}`);
+          } catch (refreshError) {
+            console.error(`Error refreshing token for ${email}:`, refreshError);
+            continue;
+          }
+        }
         
         // Get user's filter settings
         const { data: filterSettings } = await supabase
@@ -79,7 +120,7 @@ const handler = async (req: Request): Promise<Response> => {
         const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`;
         
         const searchResponse = await fetch(searchUrl, {
-          headers: { Authorization: `Bearer ${access_token}` }
+          headers: { Authorization: `Bearer ${currentAccessToken}` }
         });
 
         if (!searchResponse.ok) {
@@ -110,7 +151,7 @@ const handler = async (req: Request): Promise<Response> => {
             // Get full message details
             const messageUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}`;
             const messageResponse = await fetch(messageUrl, {
-              headers: { Authorization: `Bearer ${access_token}` }
+              headers: { Authorization: `Bearer ${currentAccessToken}` }
             });
 
             if (!messageResponse.ok) continue;
@@ -143,7 +184,7 @@ const handler = async (req: Request): Promise<Response> => {
                 // Download attachment
                 const attachmentUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}/attachments/${part.body.attachmentId}`;
                 const attachmentResponse = await fetch(attachmentUrl, {
-                  headers: { Authorization: `Bearer ${access_token}` }
+                  headers: { Authorization: `Bearer ${currentAccessToken}` }
                 });
 
                 if (!attachmentResponse.ok) continue;
