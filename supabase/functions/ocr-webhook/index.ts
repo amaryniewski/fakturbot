@@ -68,26 +68,29 @@ const handler = async (req: Request): Promise<Response> => {
     if (payload.parsedData && Array.isArray(payload.parsedData)) {
       console.log("Processing n8n parsed data format");
       
-      // For n8n format, we need to find invoices with status 'processing' to update
-      const { data: processingInvoices, error: fetchError } = await supabase
+      // For n8n format, we need to find invoices to update - try different statuses
+      const { data: availableInvoices, error: fetchError } = await supabase
         .from('invoices')
         .select('*')
-        .eq('status', 'processing')
+        .in('status', ['processing', 'new', 'queued']) // Try multiple statuses
         .order('created_at', { ascending: true });
 
+      console.log("Available invoices found:", availableInvoices?.length || 0);
+      console.log("Invoice statuses:", availableInvoices?.map(inv => ({ id: inv.id, status: inv.status, file_name: inv.file_name })));
+
       if (fetchError) {
-        throw new Error(`Failed to fetch processing invoices: ${fetchError.message}`);
+        throw new Error(`Failed to fetch invoices: ${fetchError.message}`);
       }
 
-      if (!processingInvoices || processingInvoices.length === 0) {
-        throw new Error("No processing invoices found to update with parsed data");
+      if (!availableInvoices || availableInvoices.length === 0) {
+        throw new Error("No invoices found to update with parsed data. Please check if invoices exist in the database.");
       }
 
       // Match parsed data to invoices (in order they were processed)
       payload.parsedData.forEach((parsedItem, index) => {
-        if (processingInvoices[index]) {
+        if (availableInvoices[index]) {
           invoicesToProcess.push({
-            invoiceId: processingInvoices[index].id,
+            invoiceId: availableInvoices[index].id,
             parsedData: parsedItem,
             status: 'success'
           });
