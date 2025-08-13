@@ -262,10 +262,12 @@ const handler = async (req: Request): Promise<Response> => {
                 totalProcessed++;
                 console.log(`Processed invoice: ${part.filename} from ${senderEmail}`);
                 
-                // Trigger OCR processing
-                await supabase.functions.invoke('ocr-processor', {
-                  body: { fileName, userId: user_id }
-                });
+                // Auto-trigger OCR if enabled in company settings
+                if (shouldAutoOCR) {
+                  await supabase.functions.invoke('ocr-processor', {
+                    body: { fileName, userId: user_id }
+                  });
+                }
               }
             }
           } catch (messageError) {

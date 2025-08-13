@@ -11,6 +11,7 @@ import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
 import { ImapConnectionForm } from "@/components/ImapConnectionForm";
 import { GmailFilterSettings } from "@/components/GmailFilterSettings";
 import { InvoiceProcessingControls } from "@/components/InvoiceProcessingControls";
+import { AutomationSettings } from "@/components/AutomationSettings";
 import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
