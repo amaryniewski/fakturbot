@@ -372,33 +372,33 @@ export type Database = {
       }
       ocr_comparisons: {
         Row: {
+          claude_vision_result_id: string | null
           comparison_data: Json | null
           confidence_score: number | null
           created_at: string | null
           final_decision: Json | null
-          google_ai_result_id: string | null
           id: string
           invoice_id: string | null
           needs_manual_review: boolean | null
           ocr_space_result_id: string | null
         }
         Insert: {
+          claude_vision_result_id?: string | null
           comparison_data?: Json | null
           confidence_score?: number | null
           created_at?: string | null
           final_decision?: Json | null
-          google_ai_result_id?: string | null
           id?: string
           invoice_id?: string | null
           needs_manual_review?: boolean | null
           ocr_space_result_id?: string | null
         }
         Update: {
+          claude_vision_result_id?: string | null
           comparison_data?: Json | null
           confidence_score?: number | null
           created_at?: string | null
           final_decision?: Json | null
-          google_ai_result_id?: string | null
           id?: string
           invoice_id?: string | null
           needs_manual_review?: boolean | null
@@ -406,8 +406,8 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ocr_comparisons_google_ai_result_id_fkey"
-            columns: ["google_ai_result_id"]
+            foreignKeyName: "ocr_comparisons_claude_vision_result_id_fkey"
+            columns: ["claude_vision_result_id"]
             isOneToOne: false
             referencedRelation: "ocr_results"
             referencedColumns: ["id"]
