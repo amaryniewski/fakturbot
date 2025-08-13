@@ -28,8 +28,8 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { fromDate } = await req.json().catch(() => ({}));
-    console.log('Gmail processor started with fromDate:', fromDate);
+    const { fromDate, toDate } = await req.json().catch(() => ({}));
+    console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Get all active Gmail connections - use service role to bypass RLS
@@ -60,9 +60,21 @@ const handler = async (req: Request): Promise<Response> => {
 
         const { access_token, email, user_id } = tokenData[0];
         
+        // Get user's filter settings
+        const { data: filterSettings } = await supabase
+          .from('gmail_filter_settings')
+          .select('filter_query, allowed_sender_emails')
+          .eq('user_id', user_id)
+          .single();
+        
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const query = `in:inbox has:attachment after:${searchFromDate.toISOString().split('T')[0]} filename:pdf`;
+        const searchToDate = toDate ? new Date(toDate) : new Date();
+        
+        // Use custom filter query if available, otherwise default
+        const baseQuery = filterSettings?.filter_query || 'has:attachment is:unread subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury';
+        const dateQuery = `after:${searchFromDate.toISOString().split('T')[0]} before:${searchToDate.toISOString().split('T')[0]}`;
+        const query = `${baseQuery} ${dateQuery}`;
         
         const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`;
         
@@ -111,6 +123,17 @@ const handler = async (req: Request): Promise<Response> => {
             const from = headers.find(h => h.name === 'From')?.value || '';
             const senderEmail = from.match(/<(.+)>/)?.[1] || from;
             const receivedDate = new Date(parseInt(messageData.internalDate));
+            
+            // Check if sender is allowed (if restriction is set)
+            if (filterSettings?.allowed_sender_emails && filterSettings.allowed_sender_emails.length > 0) {
+              const isAllowed = filterSettings.allowed_sender_emails.some(allowedEmail => 
+                senderEmail.toLowerCase().includes(allowedEmail.toLowerCase())
+              );
+              if (!isAllowed) {
+                console.log(`Skipping email from ${senderEmail} - not in allowed senders list`);
+                continue;
+              }
+            }
 
             // Find PDF attachments
             const parts = messageData.payload.parts || [];

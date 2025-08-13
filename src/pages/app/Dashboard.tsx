@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
+import { Trash2 } from "lucide-react";
 
 type Invoice = {
   id: string;
@@ -89,6 +90,10 @@ const Dashboard = () => {
     date.setDate(date.getDate() - 7);
     return date.toISOString().split('T')[0];
   });
+  const [toDate, setToDate] = useState(() => {
+    // Default to today
+    return new Date().toISOString().split('T')[0];
+  });
   
   useEffect(() => { document.title = "FakturBot – Dashboard"; }, []);
 
@@ -116,7 +121,7 @@ const Dashboard = () => {
   const processGmailEmails = async () => {
     setProcessing(true);
     try {
-      const result = await processGmailInvoices(fromDate);
+      const result = await processGmailInvoices(fromDate, toDate);
       
       toast({
         title: "Sukces",
@@ -139,6 +144,35 @@ const Dashboard = () => {
       // Error handling is done in the hook
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selected.length === 0) return;
+    
+    try {
+      // Delete from database
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .in('id', selected);
+
+      if (error) throw error;
+
+      toast({
+        title: "Usunięto",
+        description: `Usunięto ${selected.length} faktur`,
+      });
+
+      setSelected([]);
+      fetchInvoices();
+    } catch (error: any) {
+      console.error('Error deleting invoices:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć faktur",
+        variant: "destructive",
+      });
     }
   };
 
@@ -306,12 +340,20 @@ const Dashboard = () => {
         <div className="border-b bg-card p-3 space-y-3 flex-shrink-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
+              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Od:</Label>
               <Input
                 id="topFromDate"
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
+                className="w-auto text-sm"
+              />
+              <Label htmlFor="topToDate" className="text-sm whitespace-nowrap">Do:</Label>
+              <Input
+                id="topToDate"
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
                 className="w-auto text-sm"
               />
               <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading} size="sm">
@@ -323,7 +365,16 @@ const Dashboard = () => {
             </div>
             <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
           </div>
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <Button 
+              variant="outline" 
+              disabled={selected.length === 0} 
+              onClick={deleteSelected}
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Usuń wybrane ({selected.length})
+            </Button>
             <Button disabled={selected.length === 0} onClick={approveSelected}>
               Zatwierdź wybrane ({selected.length})
             </Button>
@@ -356,12 +407,20 @@ const Dashboard = () => {
                     <div className="py-8">
                       <p className="mb-4">Brak faktur z emaili. Połącz Gmail i rozpocznij automatyczne przetwarzanie.</p>
                       <div className="flex items-center gap-2 mb-4">
-                        <Label htmlFor="emptyFromDate" className="text-sm">Pobierz faktur od:</Label>
+                        <Label htmlFor="emptyFromDate" className="text-sm">Od:</Label>
                         <Input
                           id="emptyFromDate"
                           type="date"
                           value={fromDate}
                           onChange={(e) => setFromDate(e.target.value)}
+                          className="w-auto text-sm"
+                        />
+                        <Label htmlFor="emptyToDate" className="text-sm">Do:</Label>
+                        <Input
+                          id="emptyToDate"
+                          type="date"
+                          value={toDate}
+                          onChange={(e) => setToDate(e.target.value)}
                           className="w-auto text-sm"
                         />
                       </div>

@@ -9,6 +9,8 @@ import { useGmailIntegration } from "@/hooks/useGmailIntegration";
 import { useImapIntegration } from "@/hooks/useImapIntegration";
 import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
 import { ImapConnectionForm } from "@/components/ImapConnectionForm";
+import { GmailFilterSettings } from "@/components/GmailFilterSettings";
+import { InvoiceProcessingControls } from "@/components/InvoiceProcessingControls";
 import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
@@ -203,6 +205,10 @@ const SettingsPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      <InvoiceProcessingControls />
+
+      <GmailFilterSettings />
 
       <Card>
         <CardHeader>
