@@ -135,7 +135,20 @@ const handler = async (req: Request): Promise<Response> => {
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
           try {
-            // Check if we already processed this message
+            // SECURITY CHECK: Verify this connection belongs to the current user_id
+            const { data: connectionVerification } = await supabase
+              .from('gmail_connections')
+              .select('user_id')
+              .eq('id', connection.id)
+              .eq('is_active', true)
+              .single();
+
+            if (!connectionVerification || connectionVerification.user_id !== user_id) {
+              console.error(`SECURITY BREACH DETECTED: Connection ${connection.id} user mismatch`);
+              continue;
+            }
+
+            // Check if we already processed this message FOR THIS SPECIFIC USER
             const { data: existingInvoice } = await supabase
               .from('invoices')
               .select('id')
@@ -210,11 +223,11 @@ const handler = async (req: Request): Promise<Response> => {
                   .from('invoices')
                   .getPublicUrl(fileName);
 
-                // Create invoice record
+                // Create invoice record - CRITICAL: Ensure user_id is set correctly
                 const { error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: user_id,
+                    user_id: user_id, // SECURITY: Always use the verified user_id from token data
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -228,6 +241,12 @@ const handler = async (req: Request): Promise<Response> => {
 
                 if (invoiceError) {
                   console.error('Failed to create invoice:', invoiceError);
+                  // SECURITY LOG
+                  await supabase.rpc('log_token_access', {
+                    p_action: 'invoice_creation_failed',
+                    p_table_name: 'invoices', 
+                    p_record_id: null
+                  });
                   continue;
                 }
 

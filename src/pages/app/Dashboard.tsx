@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
+import { SecurityAlert } from "@/components/SecurityAlert";
 import { Trash2 } from "lucide-react";
 
 type Invoice = {
@@ -343,7 +344,9 @@ const Dashboard = () => {
   const selectedItem = useMemo(() => data.find((d) => d.id === previewId) ?? null, [previewId]);
 
   return (
-    <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4 h-[calc(100vh-120px)]">
+    <div className="space-y-4">
+      <SecurityAlert />
+      <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4 h-[calc(100vh-120px)]">
       <article className="rounded-lg border bg-card shadow overflow-hidden flex flex-col max-h-full">
         {/* Date filter and controls at the top */}
         <div className="border-b bg-card p-3 space-y-3 flex-shrink-0">
@@ -503,7 +506,8 @@ const Dashboard = () => {
           </div>
         )}
       </aside>
-    </section>
+      </section>
+    </div>
   );
 };
 
