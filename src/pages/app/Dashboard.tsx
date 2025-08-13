@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
 import { SecurityAlert } from "@/components/SecurityAlert";
+import { OCRDebugPanel } from "@/components/OCRDebugPanel";
 import { Trash2 } from "lucide-react";
 
 type Invoice = {
@@ -206,28 +207,38 @@ const Dashboard = () => {
 
         if (fetchError) throw fetchError;
 
-        // Start OCR processing for each invoice in parallel
+        // Start OCR processing for each invoice - simplified approach
         const ocrPromises = approvedInvoices?.map(async (invoice) => {
           try {
             // Only start OCR if not already processed
             if (invoice.status === 'new' || invoice.status === 'failed') {
-              // Start both Claude Vision and OCR.space in parallel
-              await Promise.all([
-                supabase.functions.invoke('claude-vision-ocr', {
-                  body: { 
-                    invoiceId: invoice.id,
-                    invoiceUrl: invoice.file_url 
-                  }
-                }),
-                supabase.functions.invoke('ocr-space', {
-                  body: { 
-                    invoiceId: invoice.id,
-                    invoiceUrl: invoice.file_url 
-                  }
-                })
-              ]);
+              console.log(`Starting OCR for invoice ${invoice.id}: ${invoice.file_url}`);
               
-              console.log(`OCR processing started for invoice ${invoice.id}`);
+              // Use only OCR.space (it's working) and update invoice directly
+              const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('ocr-space', {
+                body: { 
+                  invoiceId: invoice.id,
+                  invoiceUrl: invoice.file_url 
+                }
+              });
+              
+              if (ocrError) {
+                console.error(`OCR failed for invoice ${invoice.id}:`, ocrError);
+              } else {
+                console.log(`OCR completed for invoice ${invoice.id}:`, ocrResult);
+                
+                // Wait a moment and trigger comparison
+                setTimeout(async () => {
+                  try {
+                    await supabase.functions.invoke('ocr-compare', {
+                      body: { invoiceId: invoice.id }
+                    });
+                    console.log(`OCR comparison triggered for invoice ${invoice.id}`);
+                  } catch (compareError) {
+                    console.error(`OCR comparison failed for invoice ${invoice.id}:`, compareError);
+                  }
+                }, 2000); // Wait 2 seconds
+              }
             }
           } catch (ocrError) {
             console.error(`OCR processing failed for invoice ${invoice.id}:`, ocrError);
@@ -519,6 +530,7 @@ const Dashboard = () => {
         )}
       </aside>
       </section>
+      <OCRDebugPanel />
     </div>
   );
 };
