@@ -391,6 +391,49 @@ serve(async (req) => {
 
     console.log(`OCR comparison completed for invoice ${invoiceId}. Agreement: ${(agreementRate * 100).toFixed(1)}%, Confidence: ${(finalConfidence * 100).toFixed(1)}%`);
 
+    // Get invoice details to check user_id
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('user_id')
+      .eq('id', invoiceId)
+      .single();
+
+    if (invoiceError || !invoice) {
+      console.error('Error fetching invoice for auto-send check:', invoiceError);
+    } else {
+      // Check if auto-send to accounting is enabled for this user
+      const { data: userSettings } = await supabase
+        .from('user_automation_settings')
+        .select('auto_send_to_accounting, user_id')
+        .eq('user_id', invoice.user_id)
+        .single();
+
+      // If auto-send is enabled and invoice doesn't need review, send to accounting system
+      if (userSettings?.auto_send_to_accounting && !needsReview) {
+        try {
+          // Check if user has Fakturownia connection
+          const { data: fakturowniaConnection } = await supabase
+            .rpc('get_safe_fakturownia_connections');
+
+          if (fakturowniaConnection && fakturowniaConnection.length > 0) {
+            // Send to Fakturownia instead of N8N
+            await supabase.functions.invoke('fakturownia-api', {
+              body: {
+                action: 'create_invoice',
+                invoiceId: invoiceId,
+                invoiceData: finalData
+              }
+            });
+            console.log(`Invoice ${invoiceId} automatically sent to Fakturownia`);
+          } else {
+            console.log(`Auto-send enabled but no Fakturownia connection found for user ${invoice.user_id}`);
+          }
+        } catch (autoSendError) {
+          console.error(`Auto-send to accounting failed for invoice ${invoiceId}:`, autoSendError);
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

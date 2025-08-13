@@ -194,38 +194,59 @@ const Dashboard = () => {
 
       if (error) throw error;
 
-      // Then send to n8n webhook
-      console.log("Calling send-to-n8n function...");
+      // Start OCR processing for approved invoices using Supabase functions
+      console.log("Starting OCR processing for approved invoices...");
+      
       try {
-        const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
-          body: {
-            invoiceIds: selected
-          }
-        });
-        console.log("send-to-n8n response:", { data, webhookError });
+        // Get the invoices that were just approved to start OCR
+        const { data: approvedInvoices, error: fetchError } = await supabase
+          .from('invoices')
+          .select('id, file_url, status')
+          .in('id', selected);
 
-        if (webhookError) {
-          console.error('Webhook error details:', webhookError);
-          console.error('Webhook error type:', typeof webhookError);
-          console.error('Webhook error keys:', Object.keys(webhookError));
-          toast({
-            title: "Ostrzeżenie",
-            description: `Faktury zatwierdzono, ale wystąpił problem z dalszym przetwarzaniem.`,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Wysłano!",
-            description: `${selected.length} faktur zostało przesłanych do systemu księgowego. Przetwarzanie może potrwać kilka minut.`,
-          });
-        }
-      } catch (webhookError: any) {
-        console.error('Webhook error caught:', webhookError);
-        console.error('Webhook error message:', webhookError.message);
-        console.error('Webhook error stack:', webhookError.stack);
+        if (fetchError) throw fetchError;
+
+        // Start OCR processing for each invoice in parallel
+        const ocrPromises = approvedInvoices?.map(async (invoice) => {
+          try {
+            // Only start OCR if not already processed
+            if (invoice.status === 'new' || invoice.status === 'failed') {
+              // Start both Claude Vision and OCR.space in parallel
+              await Promise.all([
+                supabase.functions.invoke('claude-vision-ocr', {
+                  body: { 
+                    invoiceId: invoice.id,
+                    invoiceUrl: invoice.file_url 
+                  }
+                }),
+                supabase.functions.invoke('ocr-space', {
+                  body: { 
+                    invoiceId: invoice.id,
+                    invoiceUrl: invoice.file_url 
+                  }
+                })
+              ]);
+              
+              console.log(`OCR processing started for invoice ${invoice.id}`);
+            }
+          } catch (ocrError) {
+            console.error(`OCR processing failed for invoice ${invoice.id}:`, ocrError);
+          }
+        }) || [];
+
+        // Wait for all OCR processing to start
+        await Promise.allSettled(ocrPromises);
+
+        toast({
+          title: "Zatwierdzono!",
+          description: `${selected.length} faktur zostało zatwierdzonych i rozpoczęto przetwarzanie OCR.`,
+        });
+
+      } catch (ocrError: any) {
+        console.error('OCR processing error:', ocrError);
         toast({
           title: "Ostrzeżenie", 
-          description: `Faktury zatwierdzono, ale wystąpił problem z dalszym przetwarzaniem.`,
+          description: `Faktury zatwierdzono, ale wystąpił problem z uruchomieniem OCR.`,
           variant: "destructive",
         });
       }
