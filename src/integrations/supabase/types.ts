@@ -531,6 +531,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_process_gmail_emails: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       can_access_connection_tokens: {
         Args: { p_connection_id: string; p_table_name: string }
         Returns: boolean
