@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.ocr-webhook]
 verify_jwt = false
+
+[functions.ocr-complete]
+verify_jwt = false
