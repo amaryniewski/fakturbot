@@ -6,27 +6,39 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface OCRResult {
-  invoiceId: string;
-  extractedData?: {
-    amount?: number;
-    currency?: string;
-    invoiceNumber?: string;
-    issueDate?: string;
-    dueDate?: string;
-    vendorName?: string;
-    vendorNIP?: string;
-    confidence?: number;
-  };
-  status: 'success' | 'failed';
-  errorMessage?: string;
-  confidence?: number;
+interface ParsedInvoiceData {
+  vendorName: string;
+  vendorNIP: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  issueDate: string;
+  dueDate: string;
+  confidence: number;
 }
 
+// Support both array format from n8n and single item format
 interface OCRWebhookPayload {
-  invoices: OCRResult[];
-  timestamp: string;
-  action: string;
+  // Array format from n8n Parse and Validate JSON
+  parsedData?: ParsedInvoiceData[];
+  invoiceId?: string;
+  
+  // Alternative single item format
+  invoice_id?: string;
+  parsed_data?: ParsedInvoiceData[];
+  success?: boolean;
+  error?: string;
+  
+  // Legacy format
+  invoices?: Array<{
+    invoiceId: string;
+    extractedData?: ParsedInvoiceData;
+    status: 'success' | 'failed';
+    errorMessage?: string;
+    confidence?: number;
+  }>;
+  timestamp?: string;
+  action?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -39,18 +51,83 @@ const handler = async (req: Request): Promise<Response> => {
     const payload: OCRWebhookPayload = await req.json();
     console.log("Received OCR results:", JSON.stringify(payload, null, 2));
 
-    if (!payload.invoices || !Array.isArray(payload.invoices)) {
-      throw new Error("Invalid payload: missing invoices array");
-    }
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // Handle different payload formats
+    let invoicesToProcess: Array<{
+      invoiceId: string;
+      parsedData?: ParsedInvoiceData;
+      status: 'success' | 'failed';
+      errorMessage?: string;
+    }> = [];
+
+    // Format 1: Array of parsed data from n8n Parse and Validate JSON (your case)
+    if (payload.parsedData && Array.isArray(payload.parsedData)) {
+      console.log("Processing n8n parsed data format");
+      
+      // For n8n format, we need to find invoices with status 'processing' to update
+      const { data: processingInvoices, error: fetchError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('status', 'processing')
+        .order('created_at', { ascending: true });
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch processing invoices: ${fetchError.message}`);
+      }
+
+      if (!processingInvoices || processingInvoices.length === 0) {
+        throw new Error("No processing invoices found to update with parsed data");
+      }
+
+      // Match parsed data to invoices (in order they were processed)
+      payload.parsedData.forEach((parsedItem, index) => {
+        if (processingInvoices[index]) {
+          invoicesToProcess.push({
+            invoiceId: processingInvoices[index].id,
+            parsedData: parsedItem,
+            status: 'success'
+          });
+        }
+      });
+    }
+    // Format 2: Single invoice with ID provided
+    else if (payload.invoice_id || payload.invoiceId) {
+      const invoiceId = payload.invoice_id || payload.invoiceId;
+      
+      if (payload.parsed_data && Array.isArray(payload.parsed_data) && payload.parsed_data.length > 0) {
+        invoicesToProcess.push({
+          invoiceId: invoiceId,
+          parsedData: payload.parsed_data[0],
+          status: 'success'
+        });
+      } else {
+        invoicesToProcess.push({
+          invoiceId: invoiceId,
+          status: 'failed',
+          errorMessage: payload.error || 'No parsed data provided'
+        });
+      }
+    }
+    // Format 3: Legacy format
+    else if (payload.invoices && Array.isArray(payload.invoices)) {
+      invoicesToProcess = payload.invoices.map(inv => ({
+        invoiceId: inv.invoiceId,
+        parsedData: inv.extractedData,
+        status: inv.status,
+        errorMessage: inv.errorMessage
+      }));
+    }
+    else {
+      throw new Error("Invalid payload format: no recognizable data structure found");
+    }
+
     const results = [];
 
-    for (const invoice of payload.invoices) {
+    for (const invoice of invoicesToProcess) {
       console.log(`Processing OCR result for invoice ${invoice.invoiceId}`);
       
       try {
@@ -60,12 +137,11 @@ const handler = async (req: Request): Promise<Response> => {
           updated_at: new Date().toISOString(),
         };
 
-        if (invoice.status === 'success' && invoice.extractedData) {
-          updateData.extracted_data = invoice.extractedData;
-          updateData.confidence_score = invoice.extractedData.confidence || invoice.confidence || 0.5;
+        if (invoice.status === 'success' && invoice.parsedData) {
+          updateData.extracted_data = invoice.parsedData;
+          updateData.confidence_score = invoice.parsedData.confidence || 0.95; // Default from your example
           
-          // Auto-approve logic could go here based on confidence and rules
-          // For now, mark as needing review if confidence is low
+          // Auto-approve logic based on confidence
           updateData.needs_review = (updateData.confidence_score < 0.8);
           
           if (!updateData.needs_review) {
@@ -92,7 +168,7 @@ const handler = async (req: Request): Promise<Response> => {
             error: error.message
           });
         } else {
-          console.log(`Successfully updated invoice ${invoice.invoiceId}`);
+          console.log(`Successfully updated invoice ${invoice.invoiceId} with confidence ${updateData.confidence_score}`);
           results.push({
             invoiceId: invoice.invoiceId,
             success: true,
@@ -114,7 +190,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     return new Response(JSON.stringify({
       success: true,
-      processed: payload.invoices.length,
+      processed: invoicesToProcess.length,
       results: results,
       timestamp: new Date().toISOString()
     }), {
