@@ -86,14 +86,19 @@ const handler = async (req: Request): Promise<Response> => {
         throw new Error("No invoices found to update with parsed data. Please check if invoices exist in the database.");
       }
 
-      // Match parsed data to invoices (in order they were processed)
-      payload.parsedData.forEach((parsedItem, index) => {
-        if (availableInvoices[index]) {
+      // Match parsed data to invoices using pairedItem information
+      payload.parsedData.forEach((parsedItem: any) => {
+        // Get the index from pairedItem if available
+        const targetIndex = parsedItem.pairedItem?.item ?? parsedItem.pairedItem;
+        
+        if (typeof targetIndex === 'number' && availableInvoices[targetIndex]) {
           invoicesToProcess.push({
-            invoiceId: availableInvoices[index].id,
-            parsedData: parsedItem,
+            invoiceId: availableInvoices[targetIndex].id,
+            parsedData: parsedItem.json || parsedItem, // Handle nested json structure
             status: 'success'
           });
+        } else {
+          console.error(`Could not match parsed item to invoice. Target index: ${targetIndex}, Available invoices: ${availableInvoices.length}`);
         }
       });
     }
