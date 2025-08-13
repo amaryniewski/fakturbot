@@ -50,22 +50,45 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("No invoices found");
     }
 
-    // Prepare payload for n8n
-    const n8nPayload = {
-      timestamp: new Date().toISOString(),
-      action: 'approve_invoices',
-      invoices: invoices.map(invoice => ({
+    // Helper function to check if extracted_data contains dummy/test data
+    const isDummyData = (extractedData: any): boolean => {
+      if (!extractedData) return false;
+      
+      const dummyPatterns = [
+        'FAKTURA NR F/2024/001',
+        '1234567890', // dummy NIP
+        'NR', // dummy invoice number
+      ];
+      
+      const dataString = JSON.stringify(extractedData).toLowerCase();
+      return dummyPatterns.some(pattern => dataString.includes(pattern.toLowerCase()));
+    };
+
+    // Helper function to filter out essential invoice data only
+    const getEssentialInvoiceData = (invoice: any) => {
+      const essentialData: any = {
         id: invoice.id,
         file_name: invoice.file_name,
         file_url: invoice.file_url,
         sender_email: invoice.sender_email,
         subject: invoice.subject,
         received_at: invoice.received_at,
-        file_size: invoice.file_size,
-        extracted_data: invoice.extracted_data,
         approved_at: invoice.approved_at,
-        status: invoice.status
-      }))
+      };
+
+      // Only include extracted_data if it exists and is not dummy data
+      if (invoice.extracted_data && !isDummyData(invoice.extracted_data)) {
+        essentialData.extracted_data = invoice.extracted_data;
+      }
+
+      return essentialData;
+    };
+
+    // Prepare payload for n8n with only essential data
+    const n8nPayload = {
+      timestamp: new Date().toISOString(),
+      action: 'approve_invoices',
+      invoices: invoices.map(getEssentialInvoiceData)
     };
 
     console.log("Sending to n8n webhook:", webhookUrl);
