@@ -19,8 +19,10 @@ export const useCompanySettings = () => {
     try {
       setLoading(true);
       
-      // For now, we'll use a mock company_id since we don't have company selection yet
-      // In the future, this should come from the user's current company context
+      // First, ensure user has membership in default company
+      await supabase.rpc('create_default_membership');
+      
+      // Use the default company ID
       const mockCompanyId = "00000000-0000-0000-0000-000000000000";
       
       const { data, error } = await supabase

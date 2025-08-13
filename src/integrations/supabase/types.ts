@@ -551,6 +551,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      create_default_membership: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       decrypt_token: {
         Args: { encrypted_value: string }
         Returns: string
