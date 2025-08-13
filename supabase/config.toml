@@ -80,3 +80,12 @@ verify_jwt = false
 
 [functions.ocr-complete]
 verify_jwt = false
+
+[functions.ocr-space]
+verify_jwt = false
+
+[functions.google-document-ai]
+verify_jwt = false
+
+[functions.ocr-compare]
+verify_jwt = false

@@ -370,6 +370,111 @@ export type Database = {
           },
         ]
       }
+      ocr_comparisons: {
+        Row: {
+          comparison_data: Json | null
+          confidence_score: number | null
+          created_at: string | null
+          final_decision: Json | null
+          google_ai_result_id: string | null
+          id: string
+          invoice_id: string | null
+          needs_manual_review: boolean | null
+          ocr_space_result_id: string | null
+        }
+        Insert: {
+          comparison_data?: Json | null
+          confidence_score?: number | null
+          created_at?: string | null
+          final_decision?: Json | null
+          google_ai_result_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          needs_manual_review?: boolean | null
+          ocr_space_result_id?: string | null
+        }
+        Update: {
+          comparison_data?: Json | null
+          confidence_score?: number | null
+          created_at?: string | null
+          final_decision?: Json | null
+          google_ai_result_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          needs_manual_review?: boolean | null
+          ocr_space_result_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocr_comparisons_google_ai_result_id_fkey"
+            columns: ["google_ai_result_id"]
+            isOneToOne: false
+            referencedRelation: "ocr_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocr_comparisons_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocr_comparisons_ocr_space_result_id_fkey"
+            columns: ["ocr_space_result_id"]
+            isOneToOne: false
+            referencedRelation: "ocr_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ocr_results: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          invoice_id: string | null
+          processing_time_ms: number | null
+          provider: string
+          raw_text: string | null
+          structured_data: Json | null
+          success: boolean | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          invoice_id?: string | null
+          processing_time_ms?: number | null
+          provider: string
+          raw_text?: string | null
+          structured_data?: Json | null
+          success?: boolean | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          invoice_id?: string | null
+          processing_time_ms?: number | null
+          provider?: string
+          raw_text?: string | null
+          structured_data?: Json | null
+          success?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocr_results_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
