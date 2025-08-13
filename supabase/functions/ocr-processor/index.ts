@@ -70,23 +70,41 @@ const extractInvoiceData = (text: string): OCRResult => {
   return result;
 };
 
-const performOCR = async (fileUrl: string): Promise<string> => {
-  // For MVP, we'll use a simple text extraction
-  // In production, integrate with Google Cloud Vision, AWS Textract, or similar
-  
+const performOCRProcessing = async (invoiceId: string, supabase: any): Promise<OCRResult> => {
   try {
-    // Download the PDF
-    const response = await fetch(fileUrl);
-    if (!response.ok) {
-      throw new Error('Failed to download PDF');
+    // Get invoice data
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('id', invoiceId)
+      .single();
+
+    if (invoiceError || !invoice) {
+      throw new Error('Invoice not found');
     }
-    
-    // For now, return empty string since we don't have real OCR implementation
-    // This prevents dummy data from being inserted into the database
-    // TODO: Implement actual PDF text extraction
-    console.log('OCR processing skipped - no real implementation yet');
-    return '';
-    
+
+    // Trigger parallel OCR processing
+    const [claudeResponse, ocrSpaceResponse] = await Promise.allSettled([
+      supabase.functions.invoke('claude-vision-ocr', {
+        body: { invoiceId, invoiceUrl: invoice.file_url }
+      }),
+      supabase.functions.invoke('ocr-space', {
+        body: { invoiceId, invoiceUrl: invoice.file_url }
+      })
+    ]);
+
+    // Wait for results and compare them
+    setTimeout(async () => {
+      try {
+        await supabase.functions.invoke('ocr-compare', {
+          body: { invoiceId }
+        });
+      } catch (compareError) {
+        console.error('OCR comparison failed:', compareError);
+      }
+    }, 5000); // Wait 5 seconds for OCR results
+
+    return { confidence: 0.8 }; // Placeholder
   } catch (error) {
     console.error('OCR processing failed:', error);
     throw error;
@@ -132,11 +150,8 @@ const handler = async (req: Request): Promise<Response> => {
       .eq('id', invoice.id);
 
     try {
-      // Perform OCR
-      const ocrText = await performOCR(invoice.file_url);
-      
-      // Extract structured data
-      const extractedData = extractInvoiceData(ocrText);
+      // Perform OCR processing using new Supabase functions
+      const extractedData = await performOCRProcessing(invoice.id, supabase);
       
       // Check auto-approval rules
       const { data: rules } = await supabase

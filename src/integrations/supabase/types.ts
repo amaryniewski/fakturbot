@@ -206,7 +206,9 @@ export type Database = {
           file_url: string | null
           gmail_message_id: string | null
           id: string
+          last_processing_error: string | null
           needs_review: boolean | null
+          processing_attempts: number | null
           received_at: string
           sender_email: string
           status: string
@@ -226,7 +228,9 @@ export type Database = {
           file_url?: string | null
           gmail_message_id?: string | null
           id?: string
+          last_processing_error?: string | null
           needs_review?: boolean | null
+          processing_attempts?: number | null
           received_at: string
           sender_email: string
           status?: string
@@ -246,7 +250,9 @@ export type Database = {
           file_url?: string | null
           gmail_message_id?: string | null
           id?: string
+          last_processing_error?: string | null
           needs_review?: boolean | null
+          processing_attempts?: number | null
           received_at?: string
           sender_email?: string
           status?: string
@@ -699,6 +705,16 @@ export type Database = {
           created_at: string
           updated_at: string
           token_expires_at: string
+        }[]
+      }
+      get_user_invoice_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          total_count: number
+          new_count: number
+          processing_count: number
+          success_count: number
+          failed_count: number
         }[]
       }
       insert_encrypted_fakturownia_connection: {

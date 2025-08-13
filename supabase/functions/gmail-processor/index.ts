@@ -52,7 +52,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => c.email));
     
-    let totalProcessed = 0;
+        let totalProcessed = 0;
+        let skippedDuplicates = 0;
     
     for (const connection of connections || []) {
       console.log(`Processing connection: ${connection.email}`);
@@ -167,6 +168,7 @@ const handler = async (req: Request): Promise<Response> => {
 
             if (existingInvoice) {
               console.log(`Message ${message.id} already processed, skipping`);
+              skippedDuplicates++;
               continue;
             }
 
@@ -250,6 +252,12 @@ const handler = async (req: Request): Promise<Response> => {
 
                 if (invoiceError) {
                   console.error('Failed to create invoice:', invoiceError);
+                  // Check if it's a duplicate error (new constraint)
+                  if (invoiceError.code === '23505' && invoiceError.message.includes('unique_user_message_attachment')) {
+                    console.log(`Duplicate invoice detected for message ${message.id}, skipping`);
+                    skippedDuplicates++;
+                    continue;
+                  }
                   // SECURITY LOG
                   await supabase.rpc('log_token_access', {
                     p_action: 'invoice_creation_failed',
@@ -262,11 +270,22 @@ const handler = async (req: Request): Promise<Response> => {
                 totalProcessed++;
                 console.log(`Processed invoice: ${part.filename} from ${senderEmail}`);
                 
-                // Auto-trigger OCR if enabled in company settings
+                // Auto-trigger OCR if enabled - use Supabase OCR instead of N8N
                 if (shouldAutoOCR) {
-                  await supabase.functions.invoke('ocr-processor', {
-                    body: { fileName, userId: user_id }
-                  });
+                  try {
+                    // Start OCR processing with Claude Vision and OCR.space
+                    await Promise.all([
+                      supabase.functions.invoke('claude-vision-ocr', {
+                        body: { invoiceId: null, invoiceUrl: publicUrl }
+                      }),
+                      supabase.functions.invoke('ocr-space', {
+                        body: { invoiceId: null, invoiceUrl: publicUrl }
+                      })
+                    ]);
+                    console.log(`OCR processing started for ${part.filename}`);
+                  } catch (ocrError) {
+                    console.error(`OCR processing failed for ${part.filename}:`, ocrError);
+                  }
                 }
               }
             }
@@ -281,11 +300,14 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    console.log(`Gmail processing completed: ${totalProcessed} new invoices, ${skippedDuplicates} duplicates skipped`);
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
         processedConnections: connections?.length || 0,
-        processedInvoices: totalProcessed 
+        processedInvoices: totalProcessed,
+        skippedDuplicates: skippedDuplicates
       }),
       { headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
