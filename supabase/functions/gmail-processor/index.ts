@@ -29,17 +29,10 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const { fromDate, toDate } = await req.json().catch(() => ({}));
-    console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Check if OCR should be auto-triggered based on user settings
-    const { data: userSettings } = await supabase
-      .from('user_automation_settings')
-      .select('auto_send_to_ocr')
-      .eq('auto_import_emails', true)
-      .single();
-    
-    const shouldAutoOCR = userSettings?.auto_send_to_ocr || false;
+    // We'll check OCR settings per user, not globally
+    console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
     
     // Get all active Gmail connections - use service role to bypass RLS
     const { data: connections, error: connectionsError } = await supabase
@@ -110,6 +103,17 @@ const handler = async (req: Request): Promise<Response> => {
             continue;
           }
         }
+        
+        
+        // Get user's automation settings - check OCR setting per user
+        const { data: userAutomationSettings } = await supabase
+          .from('user_automation_settings')
+          .select('auto_send_to_ocr')
+          .eq('user_id', user_id)
+          .single();
+          
+        const shouldAutoOCR = userAutomationSettings?.auto_send_to_ocr || false;
+        console.log(`User ${user_id} auto OCR setting:`, shouldAutoOCR);
         
         // Get user's filter settings
         const { data: filterSettings } = await supabase
@@ -268,11 +272,12 @@ const handler = async (req: Request): Promise<Response> => {
                 }
 
                 totalProcessed++;
-                console.log(`Processed invoice: ${part.filename} from ${senderEmail}`);
+                console.log(`Processed invoice: ${part.filename} from ${senderEmail} (user: ${user_id})`);
                 
-                // Auto-trigger OCR if enabled - use Supabase OCR instead of N8N
+                // Auto-trigger OCR if enabled for THIS USER - use Supabase OCR instead of N8N
                 if (shouldAutoOCR) {
                   try {
+                    console.log(`Starting OCR for user ${user_id}, invoice: ${part.filename}`);
                     // Start OCR processing with Claude Vision and OCR.space
                     await Promise.all([
                       supabase.functions.invoke('claude-vision-ocr', {
@@ -286,6 +291,8 @@ const handler = async (req: Request): Promise<Response> => {
                   } catch (ocrError) {
                     console.error(`OCR processing failed for ${part.filename}:`, ocrError);
                   }
+                } else {
+                  console.log(`OCR not started for ${part.filename} - user ${user_id} has auto OCR disabled`);
                 }
               }
             }
