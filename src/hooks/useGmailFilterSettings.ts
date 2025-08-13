@@ -44,6 +44,8 @@ export const useGmailFilterSettings = () => {
           user_id: (await supabase.auth.getUser()).data.user?.id,
           filter_query: newSettings.filter_query,
           allowed_sender_emails: newSettings.allowed_sender_emails
+        }, {
+          onConflict: 'user_id'
         });
 
       if (error) throw error;
