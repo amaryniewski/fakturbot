@@ -30,18 +30,38 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { fromDate, toDate } = await req.json().catch(() => ({}));
     console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
+    
+    // Get user ID from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new Error('Missing or invalid Authorization header');
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Get all active Gmail connections - use service role with proper validation
+    // Verify token and get user ID
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      throw new Error('Invalid token or user not found');
+    }
+    
+    const currentUserId = user.id;
+    console.log(`🔒 Processing Gmail for authenticated user: ${currentUserId}`);
+    
+    // Get ONLY connections belonging to the authenticated user
     const { data: connections, error: connectionsError } = await supabase
-      .rpc('get_all_active_gmail_connections_for_processing');
+      .from('gmail_connections')
+      .select('id, email, user_id')
+      .eq('user_id', currentUserId)
+      .eq('is_active', true);
 
     if (connectionsError) {
       console.error('Failed to fetch connections:', connectionsError);
       throw new Error(`Failed to fetch connections: ${connectionsError.message}`);
     }
 
-    console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => `${c.email} (user: ${c.user_id})`));
+    console.log(`Processing ${connections?.length || 0} Gmail connections for user ${currentUserId}:`, connections?.map(c => c.email));
     
     let totalProcessed = 0;
     
@@ -49,30 +69,13 @@ const handler = async (req: Request): Promise<Response> => {
       const { id: connectionId, email: userEmail, user_id: connectionUserId } = connection;
       console.log(`🔄 Processing connection: ${userEmail} for user: ${connectionUserId}`);
       
-      // Critical security validation
-      if (!connectionUserId) {
-        console.error(`❌ CRITICAL: No user_id found for connection ${connectionId}, skipping`);
+      // Security check: ensure connection belongs to authenticated user
+      if (connectionUserId !== currentUserId) {
+        console.error(`❌ CRITICAL: Connection ${connectionId} user_id ${connectionUserId} doesn't match authenticated user ${currentUserId}`);
         continue;
       }
       
       try {
-        // CRITICAL: Enhanced connection ownership validation
-        const { data: isValidOwner } = await supabase
-          .rpc('validate_connection_ownership_enhanced', { 
-            p_connection_id: connectionId, 
-            p_user_id: connectionUserId 
-          });
-        
-        if (!isValidOwner) {
-          console.error(`❌ CRITICAL SECURITY: Connection ${connectionId} ownership validation failed for user ${connectionUserId}`);
-          await supabase.rpc('audit_user_data_access', {
-            p_user_id: connectionUserId,
-            p_operation: 'connection_SECURITY_VIOLATION',
-            p_table_name: 'gmail_connections',
-            p_details: { connection_id: connectionId, attempted_by: 'gmail-processor' }
-          });
-          continue;
-        }
         
         // Get decrypted tokens for this connection using the new function that includes user_id
         const { data: tokenData, error: tokenError } = await supabase
@@ -130,14 +133,14 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
         
-        // Get user's filter settings - use service role with proper user validation
+        // Get user's filter settings for the authenticated user
         const { data: filterSettings } = await supabase
           .from('gmail_filter_settings')
           .select('filter_query, allowed_sender_emails')
-          .eq('user_id', connectionUserId)
+          .eq('user_id', currentUserId)
           .single();
         
-        console.log(`Processing Gmail connection for user ${connectionUserId}, email: ${userEmail}`);
+        console.log(`Processing Gmail connection for user ${currentUserId}, email: ${userEmail}`);
         
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -177,26 +180,10 @@ const handler = async (req: Request): Promise<Response> => {
               .eq('gmail_message_id', message.id)
               .maybeSingle();
             
-            console.log(`Checking for existing invoice for message ${message.id} and user ${connectionUserId}:`, existingInvoice);
+            console.log(`Checking for existing invoice for message ${message.id} and user ${currentUserId}:`, existingInvoice);
 
             if (existingInvoice) {
-              // CRITICAL SECURITY CHECK: If invoice exists but for different user - this is expected for shared/forwarded emails
-              if (existingInvoice.user_id !== tokenUserId) {
-                console.log(`⚠️ CROSS-USER MESSAGE DETECTED: Message ${message.id} already processed for user ${existingInvoice.user_id}, skipping for user ${tokenUserId} (this is normal for forwarded/shared emails)`);
-                await supabase.rpc('audit_user_data_access', {
-                  p_user_id: tokenUserId,
-                  p_operation: 'message_cross_user_skipped',
-                  p_table_name: 'invoices',
-                  p_details: { 
-                    message_id: message.id, 
-                    existing_user: existingInvoice.user_id,
-                    skipped_user: tokenUserId,
-                    reason: 'message_already_processed'
-                  }
-                });
-                continue;
-              }
-              console.log(`Message ${message.id} already processed for current user ${tokenUserId}, skipping`);
+              console.log(`Message ${message.id} already processed for user ${currentUserId}, skipping`);
               continue;
             }
 
@@ -244,7 +231,7 @@ const handler = async (req: Request): Promise<Response> => {
                 const attachmentData = await attachmentResponse.json();
                 const fileBuffer = Uint8Array.from(atob(attachmentData.data.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
-                const fileName = `${tokenUserId}/${Date.now()}-${part.filename}`;
+                const fileName = `${currentUserId}/${Date.now()}-${part.filename}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                   .from('invoices')
                   .upload(fileName, fileBuffer, {
@@ -261,30 +248,14 @@ const handler = async (req: Request): Promise<Response> => {
                   .from('invoices')
                   .getPublicUrl(fileName);
 
-                // CRITICAL SECURITY: Validate connection ownership before creating invoice
-                if (!tokenUserId) {
-                  console.error(`🚨 CRITICAL: tokenUserId is null for connection ${userEmail}`);
-                  continue;
-                }
+                // Log invoice creation attempt
+                console.log(`✅ Creating invoice for user ${currentUserId}, email: ${userEmail}, message: ${message.id}`);
 
-                // CRITICAL: Log invoice creation attempt with security audit
-                console.log(`✅ SECURITY VALIDATED: Creating invoice for connection owner ${tokenUserId}, email: ${userEmail}, message: ${message.id}`);
-                await supabase.rpc('audit_user_data_access', {
-                  p_user_id: tokenUserId,
-                  p_operation: 'invoice_creation_attempt',
-                  p_table_name: 'invoices',
-                  p_details: { 
-                    message_id: message.id,
-                    connection_email: userEmail,
-                    source: 'gmail-processor'
-                  }
-                });
-
-                // CRITICAL SECURITY: Use user_id from connection destructuring
+                // Create invoice for authenticated user
                 const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: tokenUserId, // CRITICAL: Use user_id from token function for absolute isolation
+                    user_id: currentUserId, // Use authenticated user ID
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -299,27 +270,18 @@ const handler = async (req: Request): Promise<Response> => {
                   .single();
 
                 if (invoiceError) {
-                  console.error(`❌ FAILED to create invoice for user ${tokenUserId}:`, invoiceError);
-                  await supabase.rpc('audit_user_data_access', {
-                    p_user_id: tokenUserId,
-                    p_operation: 'invoice_creation_FAILED',
-                    p_table_name: 'invoices',
-                    p_details: { 
-                      message_id: message.id,
-                      error: invoiceError.message
-                    }
-                  });
+                  console.error(`❌ FAILED to create invoice for user ${currentUserId}:`, invoiceError);
                   continue;
                 }
 
-                console.log(`✅ SECURITY VALIDATED INVOICE for USER ${tokenUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
+                console.log(`✅ Invoice created for USER ${currentUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
 
-                // Trigger OCR processing with proper user_id validation
+                // Trigger OCR processing
                 try {
                   await supabase.functions.invoke('ocr-processor', {
                     body: { 
                       invoiceId: invoiceData.id, 
-                      userId: tokenUserId // Use tokenUserId for consistency - this is the actual owner
+                      userId: currentUserId
                     }
                   });
                 } catch (ocrError) {
