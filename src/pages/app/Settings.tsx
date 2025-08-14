@@ -9,8 +9,10 @@ import { useGmailIntegration } from "@/hooks/useGmailIntegration";
 import { useImapIntegration } from "@/hooks/useImapIntegration";
 import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
 import { ImapConnectionForm } from "@/components/ImapConnectionForm";
+import { SecurityMonitoring } from "@/components/SecurityMonitoring";
 import { GmailFilterSettings } from "@/components/GmailFilterSettings";
 import { InvoiceProcessingControls } from "@/components/InvoiceProcessingControls";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
@@ -367,6 +369,16 @@ const SettingsPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Security Monitoring */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="security">
+          <AccordionTrigger>Monitoring Bezpieczeństwa</AccordionTrigger>
+          <AccordionContent>
+            <SecurityMonitoring />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </section>
   );
 };

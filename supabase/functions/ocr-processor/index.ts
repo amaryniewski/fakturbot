@@ -116,34 +116,57 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('User ID is required for security validation');
     }
     
-    // Validate invoice ownership using our security function
+    // CRITICAL: Enhanced invoice ownership validation with security logging
     const { data: hasAccess } = await supabase
-      .rpc('validate_invoice_ownership', { 
+      .rpc('validate_invoice_ownership_enhanced', { 
         p_invoice_id: invoiceId, 
         p_user_id: userId 
       });
     
     if (!hasAccess) {
-      console.error(`❌ SECURITY: User ${userId} attempted to access invoice ${invoiceId} without permission`);
+      console.error(`❌ CRITICAL SECURITY: Invoice ${invoiceId} ownership validation failed for user ${userId}`);
+      await supabase.rpc('audit_user_data_access', {
+        p_user_id: userId,
+        p_operation: 'ocr_invoice_SECURITY_ACCESS_DENIED',
+        p_table_name: 'invoices',
+        p_details: { invoice_id: invoiceId, source: 'ocr-processor' }
+      });
       throw new Error('Access denied: Invoice not found or not authorized');
     }
 
-    // Get the invoice record with explicit user validation
+    // Get the invoice record with enhanced security validation
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .select('*')
       .eq('id', invoiceId)
+      .eq('user_id', userId) // CRITICAL: Double-check user_id match
       .single();
 
     if (invoiceError || !invoice) {
-      console.error('❌ Invoice not found or access denied:', invoiceError);
-      throw new Error('Invoice not found or access denied');
+      console.error(`❌ FAILED to fetch invoice ${invoiceId}:`, invoiceError);
+      await supabase.rpc('audit_user_data_access', {
+        p_user_id: userId,
+        p_operation: 'invoice_fetch_SECURITY_FAILED',
+        p_table_name: 'invoices',
+        p_details: { invoice_id: invoiceId, error: invoiceError?.message }
+      });
+      throw new Error('Invoice not found');
     }
     
-    // Additional security validation - ensure user_id matches
+    // CRITICAL: Verify user_id matches exactly
     if (invoice.user_id !== userId) {
-      console.error(`❌ CRITICAL SECURITY ERROR: Invoice ${invoiceId} user_id mismatch! Invoice user: ${invoice.user_id}, Requesting user: ${userId}`);
-      throw new Error('Access denied: Invoice user_id validation failed');
+      console.error(`🚨 CRITICAL SECURITY VIOLATION: Invoice user_id mismatch! Expected: ${userId}, Got: ${invoice.user_id}`);
+      await supabase.rpc('audit_user_data_access', {
+        p_user_id: userId,
+        p_operation: 'ocr_invoice_SECURITY_USER_ID_MISMATCH',
+        p_table_name: 'invoices',
+        p_details: { 
+          invoice_id: invoiceId,
+          expected_user: userId,
+          actual_user: invoice.user_id
+        }
+      });
+      throw new Error('Security violation: user_id mismatch');
     }
     
     console.log(`🔍 Processing OCR for invoice ${invoiceId} owned by user ${invoice.user_id}`);

@@ -650,6 +650,16 @@ export type Database = {
         Args: { p_connection_id: string; p_table_name: string }
         Returns: boolean
       }
+      check_data_isolation_violations: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          affected_users: string[]
+          details: Json
+          recommended_action: string
+          severity: string
+          violation_type: string
+        }[]
+      }
       check_fakturownia_connection_exists: {
         Args: { p_domain: string }
         Returns: boolean
@@ -761,6 +771,17 @@ export type Database = {
           provider: string
           server: string
           status: string
+        }[]
+      }
+      get_user_data_isolation_report: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          fakturownia_connections_count: number
+          gmail_connections_count: number
+          invoice_count: number
+          potential_security_issues: Json
+          storage_files_count: number
+          user_id: string
         }[]
       }
       get_user_fakturownia_connections: {
@@ -926,7 +947,15 @@ export type Database = {
         Args: { p_connection_id: string; p_user_id: string }
         Returns: boolean
       }
+      validate_file_path_security: {
+        Args: { p_file_path: string; p_user_id: string }
+        Returns: boolean
+      }
       validate_invoice_ownership: {
+        Args: { p_invoice_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      validate_invoice_ownership_enhanced: {
         Args: { p_invoice_id: string; p_user_id: string }
         Returns: boolean
       }
