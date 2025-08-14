@@ -99,21 +99,12 @@ const Dashboard = () => {
 
   const fetchInvoices = async () => {
     try {
-      // Check if user is authenticated
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('User not authenticated');
-        return;
-      }
-
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
-        .eq('user_id', user.id)
         .order('received_at', { ascending: false });
 
       if (error) throw error;
-      console.log('Fetched invoices:', data?.length);
       setInvoices(data || []);
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
@@ -204,17 +195,10 @@ const Dashboard = () => {
 
       // Then send to n8n webhook
       console.log("Calling send-to-n8n function...");
-      console.log("Available functions check...");
-      
       try {
-        // First try to list available functions for debugging
-        console.log("Supabase URL:", "https://qlrfbaantfrqzyrunoau.supabase.co");
-        console.log("Attempting to call function: send-to-n8n");
-        
         const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
           body: {
-            invoiceIds: selected,
-            webhookUrl: "https://your-n8n-webhook-url.com/webhook" // TODO: Get this from settings
+            invoiceIds: selected
           }
         });
         console.log("send-to-n8n response:", { data, webhookError });
