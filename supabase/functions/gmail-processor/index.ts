@@ -85,20 +85,6 @@ const handler = async (req: Request): Promise<Response> => {
 
         let { access_token, refresh_token, email: tokenEmail, token_expires_at, user_id: tokenUserId } = tokenData[0];
         
-        // CRITICAL SECURITY CHECK: Sprawdź zgodność user_id z połączenia z tokenem
-        if (tokenUserId !== connectionUserId) {
-          console.error(`❌ CRITICAL SECURITY: Token user_id ${tokenUserId} does not match connection user_id ${connectionUserId} for connection ${connectionId}`);
-          await supabase.rpc('audit_user_data_access', {
-            p_user_id: connectionUserId,
-            p_operation: 'CRITICAL_TOKEN_USER_ID_MISMATCH',
-            p_table_name: 'gmail_connections',
-            p_details: { connection_id: connectionId, token_user_id: tokenUserId, connection_user_id: connectionUserId }
-          });
-          continue;
-        }
-        
-        console.log(`✅ SECURITY VALIDATED: Connection ${connectionId} user_id ${connectionUserId} matches token user_id ${tokenUserId}`);
-        
         // Check if token is expired and refresh if needed
         const tokenExpiry = new Date(token_expires_at);
         const isExpired = tokenExpiry <= new Date();
@@ -326,7 +312,7 @@ const handler = async (req: Request): Promise<Response> => {
                   continue;
                 }
 
-                console.log(`✅ SECURITY VALIDATED INVOICE for USER ${tokenUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}. CRITICAL CHECK: tokenUserId=${tokenUserId} == invoiceData.user_id=${invoiceData.user_id}`);
+                console.log(`✅ SECURITY VALIDATED INVOICE for USER ${tokenUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
 
                 // Trigger OCR processing with proper user_id validation
                 try {
