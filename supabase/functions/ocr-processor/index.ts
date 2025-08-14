@@ -83,28 +83,21 @@ const performOCRProcessing = async (invoiceId: string, supabase: any): Promise<O
       throw new Error('Invoice not found');
     }
 
-    // Trigger parallel OCR processing
-    const [claudeResponse, ocrSpaceResponse] = await Promise.allSettled([
-      supabase.functions.invoke('claude-vision-ocr', {
-        body: { invoiceId, invoiceUrl: invoice.file_url }
-      }),
-      supabase.functions.invoke('ocr-space', {
-        body: { invoiceId, invoiceUrl: invoice.file_url }
-      })
-    ]);
-
-    // Wait for results and compare them
-    setTimeout(async () => {
-      try {
-        await supabase.functions.invoke('ocr-compare', {
-          body: { invoiceId }
-        });
-      } catch (compareError) {
-        console.error('OCR comparison failed:', compareError);
+    // Use n8n OCR processor instead of old edge functions
+    const { data: n8nResult, error: n8nError } = await supabase.functions.invoke('n8n-ocr-processor', {
+      body: { 
+        invoiceId, 
+        invoiceUrl: invoice.file_url,
+        userId: invoice.user_id
       }
-    }, 5000); // Wait 5 seconds for OCR results
+    });
 
-    return { confidence: 0.8 }; // Placeholder
+    if (n8nError) {
+      console.error('n8n OCR processing failed:', n8nError);
+      throw new Error('n8n OCR processing failed');
+    }
+
+    return n8nResult?.extractedData || { confidence: 0.5 };
   } catch (error) {
     console.error('OCR processing failed:', error);
     throw error;

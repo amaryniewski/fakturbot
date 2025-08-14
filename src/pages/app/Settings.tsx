@@ -12,6 +12,7 @@ import { ImapConnectionForm } from "@/components/ImapConnectionForm";
 import { GmailFilterSettings } from "@/components/GmailFilterSettings";
 import { InvoiceProcessingControls } from "@/components/InvoiceProcessingControls";
 import { AutomationSettings } from "@/components/AutomationSettings";
+import { N8nOCRProcessor } from "@/components/N8nOCRProcessor";
 import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
@@ -212,6 +213,24 @@ const SettingsPage = () => {
       <InvoiceProcessingControls />
 
       <GmailFilterSettings />
+
+      {/* n8n OCR Processor */}
+      <Card>
+        <CardHeader>
+          <CardTitle>n8n OCR Processor</CardTitle>
+          <CardDescription>
+            Test nowego systemu OCR opartego na workflow n8n z lepszymi wynikami rozpoznawania
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <N8nOCRProcessor 
+            onResult={(result) => {
+              console.log('n8n OCR Result:', result);
+              // Here you could show the result in a toast or dialog
+            }}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

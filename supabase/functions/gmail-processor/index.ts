@@ -246,7 +246,7 @@ const handler = async (req: Request): Promise<Response> => {
                   .getPublicUrl(fileName);
 
                 // Create invoice record - CRITICAL: Ensure user_id is set correctly
-                const { error: invoiceError } = await supabase
+                const { data: invoiceRecord, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
                     user_id: user_id, // SECURITY: Always use the verified user_id from token data
@@ -259,7 +259,9 @@ const handler = async (req: Request): Promise<Response> => {
                     file_url: publicUrl,
                     status: 'new',
                     needs_review: true
-                  });
+                  })
+                  .select('id')
+                  .single();
 
                 if (invoiceError) {
                   console.error('Failed to create invoice:', invoiceError);
@@ -284,20 +286,19 @@ const handler = async (req: Request): Promise<Response> => {
                 messageHasValidAttachments = true; // Mark this message as having valid attachments
                 console.log(`Processed invoice: ${part.filename} from ${senderEmail} (user: ${user_id})`);
                 
-                // Auto-trigger OCR if enabled for THIS USER - use Supabase OCR instead of N8N
+                // Auto-trigger OCR if enabled for THIS USER - use n8n OCR processor
                 if (shouldAutoOCR) {
                   try {
-                    console.log(`Starting OCR for user ${user_id}, invoice: ${part.filename}`);
-                    // Start OCR processing with Claude Vision and OCR.space
-                    await Promise.all([
-                      supabase.functions.invoke('claude-vision-ocr', {
-                        body: { invoiceId: null, invoiceUrl: publicUrl }
-                      }),
-                      supabase.functions.invoke('ocr-space', {
-                        body: { invoiceId: null, invoiceUrl: publicUrl }
-                      })
-                    ]);
-                    console.log(`OCR processing started for ${part.filename}`);
+                    console.log(`Starting n8n OCR for user ${user_id}, invoice: ${part.filename}`);
+                    // Use n8n OCR processor instead of old edge functions
+                    await supabase.functions.invoke('n8n-ocr-processor', {
+                      body: { 
+                        invoiceId: invoiceRecord?.id,
+                        invoiceUrl: publicUrl,
+                        userId: user_id
+                      }
+                    });
+                    console.log(`n8n OCR processing started for ${part.filename}`);
                   } catch (ocrError) {
                     console.error(`OCR processing failed for ${part.filename}:`, ocrError);
                   }

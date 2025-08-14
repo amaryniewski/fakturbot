@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.4"
@@ -163,6 +163,51 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_items: {
+        Row: {
+          created_at: string
+          gross_amount: number | null
+          id: string
+          invoice_id: string
+          item_name: string
+          net_amount: number | null
+          quantity: number | null
+          unit_price: number | null
+          updated_at: string
+          user_id: string
+          vat_amount: number | null
+          vat_rate: number | null
+        }
+        Insert: {
+          created_at?: string
+          gross_amount?: number | null
+          id?: string
+          invoice_id: string
+          item_name: string
+          net_amount?: number | null
+          quantity?: number | null
+          unit_price?: number | null
+          updated_at?: string
+          user_id: string
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Update: {
+          created_at?: string
+          gross_amount?: number | null
+          id?: string
+          invoice_id?: string
+          item_name?: string
+          net_amount?: number | null
+          quantity?: number | null
+          unit_price?: number | null
+          updated_at?: string
+          user_id?: string
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Relationships: []
+      }
       invoice_processing_rules: {
         Row: {
           created_at: string
@@ -197,6 +242,8 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          buyer_name: string | null
+          buyer_nip: string | null
           confidence_score: number | null
           created_at: string
           error_message: string | null
@@ -208,17 +255,25 @@ export type Database = {
           id: string
           last_processing_error: string | null
           needs_review: boolean | null
+          ocr_provider: string | null
           processing_attempts: number | null
           received_at: string
           sender_email: string
           status: string
           subject: string | null
+          total_gross: number | null
+          total_net: number | null
+          total_vat: number | null
           updated_at: string
           user_id: string
+          vendor_name: string | null
+          vendor_nip: string | null
         }
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          buyer_name?: string | null
+          buyer_nip?: string | null
           confidence_score?: number | null
           created_at?: string
           error_message?: string | null
@@ -230,17 +285,25 @@ export type Database = {
           id?: string
           last_processing_error?: string | null
           needs_review?: boolean | null
+          ocr_provider?: string | null
           processing_attempts?: number | null
           received_at: string
           sender_email: string
           status?: string
           subject?: string | null
+          total_gross?: number | null
+          total_net?: number | null
+          total_vat?: number | null
           updated_at?: string
           user_id: string
+          vendor_name?: string | null
+          vendor_nip?: string | null
         }
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          buyer_name?: string | null
+          buyer_nip?: string | null
           confidence_score?: number | null
           created_at?: string
           error_message?: string | null
@@ -252,13 +315,19 @@ export type Database = {
           id?: string
           last_processing_error?: string | null
           needs_review?: boolean | null
+          ocr_provider?: string | null
           processing_attempts?: number | null
           received_at?: string
           sender_email?: string
           status?: string
           subject?: string | null
+          total_gross?: number | null
+          total_net?: number | null
+          total_vat?: number | null
           updated_at?: string
           user_id?: string
+          vendor_name?: string | null
+          vendor_nip?: string | null
         }
         Relationships: []
       }
@@ -595,9 +664,9 @@ export type Database = {
       encrypt_existing_tokens: {
         Args: Record<PropertyKey, never>
         Returns: {
+          status: string
           table_name: string
           tokens_encrypted: number
-          status: string
         }[]
       }
       encrypt_token: {
@@ -607,26 +676,26 @@ export type Database = {
       get_all_active_gmail_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          email: string
-          user_id: string
           created_at: string
+          email: string
+          id: string
+          user_id: string
         }[]
       }
       get_decrypted_fakturownia_connection: {
         Args: { p_connection_id: string }
         Returns: {
+          api_token: string
           company_name: string
           domain: string
-          api_token: string
         }[]
       }
       get_decrypted_gmail_tokens: {
         Args: { p_connection_id: string }
         Returns: {
           access_token: string
-          refresh_token: string
           email: string
+          refresh_token: string
           token_expires_at: string
         }[]
       }
@@ -634,8 +703,8 @@ export type Database = {
         Args: { p_connection_id: string }
         Returns: {
           access_token: string
-          refresh_token: string
           email: string
+          refresh_token: string
           token_expires_at: string
           user_id: string
         }[]
@@ -644,96 +713,96 @@ export type Database = {
         Args: { p_mailbox_id: string }
         Returns: {
           access_token: string
-          refresh_token: string
           expires_at: string
+          refresh_token: string
         }[]
       }
       get_safe_fakturownia_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
           company_name: string
-          domain: string
-          is_active: boolean
           created_at: string
+          domain: string
+          id: string
+          is_active: boolean
           updated_at: string
         }[]
       }
       get_safe_gmail_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          email: string
-          is_active: boolean
           created_at: string
-          updated_at: string
+          email: string
+          id: string
+          is_active: boolean
           token_expires_at: string
+          updated_at: string
         }[]
       }
       get_safe_mailbox_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
+          company_id: string
+          created_at: string
           email: string
+          has_tokens: boolean
+          id: string
+          last_sync_at: string
+          port: number
           provider: string
           server: string
-          port: number
           status: string
-          created_at: string
-          last_sync_at: string
-          company_id: string
-          has_tokens: boolean
         }[]
       }
       get_user_fakturownia_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
           company_name: string
-          domain: string
-          is_active: boolean
           created_at: string
+          domain: string
+          id: string
+          is_active: boolean
           updated_at: string
         }[]
       }
       get_user_gmail_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          email: string
-          is_active: boolean
           created_at: string
-          updated_at: string
+          email: string
+          id: string
+          is_active: boolean
           token_expires_at: string
+          updated_at: string
         }[]
       }
       get_user_invoice_stats: {
         Args: { p_user_id: string }
         Returns: {
-          total_count: number
+          failed_count: number
           new_count: number
           processing_count: number
           success_count: number
-          failed_count: number
+          total_count: number
         }[]
       }
       insert_encrypted_fakturownia_connection: {
         Args: {
-          p_user_id: string
+          p_api_token: string
           p_company_name: string
           p_domain: string
-          p_api_token: string
+          p_user_id: string
         }
         Returns: string
       }
       insert_encrypted_fakturownia_connection_secure: {
-        Args: { p_company_name: string; p_domain: string; p_api_token: string }
+        Args: { p_api_token: string; p_company_name: string; p_domain: string }
         Returns: string
       }
       insert_encrypted_gmail_connection: {
         Args: {
-          p_email: string
           p_access_token: string
+          p_email: string
           p_refresh_token: string
           p_token_expires_at?: string
         }
@@ -741,18 +810,18 @@ export type Database = {
       }
       insert_encrypted_gmail_connection_for_user: {
         Args: {
-          p_user_id: string
-          p_email: string
           p_access_token: string
+          p_email: string
           p_refresh_token: string
           p_token_expires_at?: string
+          p_user_id: string
         }
         Returns: string
       }
       insert_encrypted_gmail_connection_secure: {
         Args: {
-          p_email: string
           p_access_token: string
+          p_email: string
           p_refresh_token: string
           p_token_expires_at?: string
         }
@@ -760,19 +829,19 @@ export type Database = {
       }
       insert_encrypted_mailbox_tokens: {
         Args: {
-          p_mailbox_id: string
           p_access_token: string
-          p_refresh_token?: string
           p_expires_at?: string
+          p_mailbox_id: string
+          p_refresh_token?: string
         }
         Returns: boolean
       }
       insert_encrypted_mailbox_tokens_secure: {
         Args: {
-          p_mailbox_id: string
           p_access_token: string
-          p_refresh_token?: string
           p_expires_at?: string
+          p_mailbox_id: string
+          p_refresh_token?: string
         }
         Returns: boolean
       }
@@ -781,7 +850,7 @@ export type Database = {
         Returns: boolean
       }
       log_token_access: {
-        Args: { p_action: string; p_table_name: string; p_record_id: string }
+        Args: { p_action: string; p_record_id: string; p_table_name: string }
         Returns: undefined
       }
       revoke_connection: {
@@ -794,8 +863,8 @@ export type Database = {
       }
       update_encrypted_gmail_tokens: {
         Args: {
-          p_connection_id: string
           p_access_token: string
+          p_connection_id: string
           p_refresh_token?: string
           p_token_expires_at?: string
         }
@@ -803,26 +872,26 @@ export type Database = {
       }
       update_encrypted_mailbox_tokens: {
         Args: {
-          p_mailbox_id: string
           p_access_token: string
-          p_refresh_token?: string
           p_expires_at?: string
+          p_mailbox_id: string
+          p_refresh_token?: string
         }
         Returns: boolean
       }
       validate_all_tokens_encrypted: {
         Args: Record<PropertyKey, never>
         Returns: {
+          security_status: string
           table_name: string
           unencrypted_tokens: number
-          security_status: string
         }[]
       }
       validate_token_encryption: {
         Args: Record<PropertyKey, never>
         Returns: {
-          table_name: string
           has_unencrypted_tokens: boolean
+          table_name: string
         }[]
       }
     }
