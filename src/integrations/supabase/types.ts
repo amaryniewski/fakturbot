@@ -695,6 +695,14 @@ export type Database = {
           security_violations: Json
         }[]
       }
+      emergency_security_lockdown: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          action_taken: string
+          affected_records: number
+          status: string
+        }[]
+      }
       encrypt_existing_tokens: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -956,6 +964,15 @@ export type Database = {
           security_status: string
           table_name: string
           unencrypted_tokens: number
+        }[]
+      }
+      validate_complete_data_isolation: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          details: Json
+          isolation_status: string
+          table_name: string
+          violation_count: number
         }[]
       }
       validate_connection_ownership: {
