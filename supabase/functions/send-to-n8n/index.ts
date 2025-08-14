@@ -100,19 +100,20 @@ const handler = async (req: Request): Promise<Response> => {
         const fileBuffer = await fileResponse.arrayBuffer();
         console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
 
-        console.log(`Sending ${invoice.file_name} as binary data to webhook...`);
+        console.log(`Sending ${invoice.file_name} as FormData with field "data"...`);
         
-        // Send raw PDF binary data to N8N webhook
+        // Create FormData with PDF file in "data" field (as expected by N8N)
+        const formData = new FormData();
+        const blob = new Blob([fileBuffer], { type: 'application/pdf' });
+        formData.append('data', blob, invoice.file_name);
+        
+        // Send to N8N webhook with FormData
         const webhookResponse = await fetch(webhookUrl, {
           method: "POST",
           headers: {
-            "Content-Type": "application/pdf",
             "User-Agent": "FakturBot/1.0",
-            "X-Invoice-ID": invoice.id,
-            "X-File-Name": invoice.file_name,
-            "X-Sender-Email": invoice.sender_email,
           },
-          body: fileBuffer
+          body: formData
         });
 
         console.log(`Webhook response for ${invoice.file_name}: ${webhookResponse.status}`);
