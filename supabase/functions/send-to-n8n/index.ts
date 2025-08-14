@@ -25,8 +25,8 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Get webhook URL from Supabase secrets
-    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
+    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL_PROD");
+    console.log("N8N_WEBHOOK_URL_PROD exists:", !!webhookUrl);
     if (!webhookUrl) {
       throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
@@ -53,7 +53,36 @@ const handler = async (req: Request): Promise<Response> => {
     // Download PDF files from Storage and prepare FormData with files
     const formData = new FormData();
     
-    // Add metadata as JSON
+    // Download and attach PDF files with N8N field name "data"
+    for (const invoice of invoices) {
+      if (invoice.file_url) {
+        try {
+          console.log(`Downloading PDF for invoice ${invoice.id}: ${invoice.file_url}`);
+          
+          // Get file from Supabase Storage
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from('invoices')
+            .download(invoice.file_url.split('/invoices/')[1]); // Extract path after bucket name
+          
+          if (downloadError) {
+            console.error(`Failed to download file for invoice ${invoice.id}:`, downloadError);
+            continue;
+          }
+          
+          if (fileData) {
+            // Convert blob to file and add to FormData with field name "data"
+            const file = new File([fileData], invoice.file_name, { type: 'application/pdf' });
+            formData.append('data', file);
+            console.log(`Added file ${invoice.file_name} to FormData with field name "data"`);
+          }
+        } catch (downloadError) {
+          console.error(`Error downloading file for invoice ${invoice.id}:`, downloadError);
+          // Continue with other files even if one fails
+        }
+      }
+    }
+    
+    // Add metadata as separate field
     const n8nPayload = {
       timestamp: new Date().toISOString(),
       action: 'approve_invoices',
@@ -72,36 +101,7 @@ const handler = async (req: Request): Promise<Response> => {
       }))
     };
     
-    formData.append('json', JSON.stringify(n8nPayload));
-    
-    // Download and attach PDF files
-    for (const invoice of invoices) {
-      if (invoice.file_url) {
-        try {
-          console.log(`Downloading PDF for invoice ${invoice.id}: ${invoice.file_url}`);
-          
-          // Get file from Supabase Storage
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from('invoices')
-            .download(invoice.file_url.split('/invoices/')[1]); // Extract path after bucket name
-          
-          if (downloadError) {
-            console.error(`Failed to download file for invoice ${invoice.id}:`, downloadError);
-            continue;
-          }
-          
-          if (fileData) {
-            // Convert blob to file and add to FormData
-            const file = new File([fileData], invoice.file_name, { type: 'application/pdf' });
-            formData.append(`file_${invoice.id}`, file);
-            console.log(`Added file ${invoice.file_name} to FormData`);
-          }
-        } catch (downloadError) {
-          console.error(`Error downloading file for invoice ${invoice.id}:`, downloadError);
-          // Continue with other files even if one fails
-        }
-      }
-    }
+    formData.append('metadata', JSON.stringify(n8nPayload));
 
     console.log("Sending to n8n webhook:", webhookUrl);
     console.log("Payload:", JSON.stringify(n8nPayload, null, 2));
