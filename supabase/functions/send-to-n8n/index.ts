@@ -16,27 +16,44 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    console.log("send-to-n8n function called");
+    console.log("=== SEND-TO-N8N FUNCTION START ===");
     const { invoiceIds }: SendToN8nRequest = await req.json();
     console.log("Received invoiceIds:", invoiceIds);
     
     if (!invoiceIds || invoiceIds.length === 0) {
+      console.error("ERROR: No invoice IDs provided");
       throw new Error("No invoice IDs provided");
     }
 
     // Get webhook URL from Supabase secrets
+    console.log("=== CHECKING ENVIRONMENT VARIABLES ===");
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
+    console.log("N8N_WEBHOOK_URL found:", !!webhookUrl);
+    console.log("N8N_WEBHOOK_URL value (first 50 chars):", webhookUrl ? webhookUrl.substring(0, 50) + "..." : "NOT FOUND");
     
     if (!webhookUrl) {
-      throw new Error("N8N webhook URL not configured in Supabase secrets");
+      console.error("ERROR: N8N_WEBHOOK_URL not found in environment");
+      return new Response(JSON.stringify({ 
+        error: "N8N webhook URL not configured in Supabase secrets",
+        success: false 
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
+    console.log("=== INITIALIZING SUPABASE CLIENT ===");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    console.log("SUPABASE_URL found:", !!supabaseUrl);
+    console.log("SUPABASE_SERVICE_ROLE_KEY found:", !!supabaseKey);
+
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      supabaseUrl ?? "",
+      supabaseKey ?? ""
     );
 
+    console.log("=== FETCHING INVOICES FROM DATABASE ===");
     // Get invoice details
     const { data: invoices, error } = await supabase
       .from('invoices')
@@ -44,10 +61,12 @@ const handler = async (req: Request): Promise<Response> => {
       .in('id', invoiceIds);
 
     if (error) {
+      console.error("Database error:", error);
       throw error;
     }
 
     if (!invoices || invoices.length === 0) {
+      console.error("No invoices found for IDs:", invoiceIds);
       throw new Error("No invoices found");
     }
 
