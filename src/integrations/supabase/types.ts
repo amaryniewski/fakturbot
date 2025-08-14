@@ -743,6 +743,10 @@ export type Database = {
           refresh_token: string
         }[]
       }
+      get_gmail_message_owner: {
+        Args: { p_gmail_message_id: string }
+        Returns: string
+      }
       get_safe_fakturownia_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -956,6 +960,10 @@ export type Database = {
       }
       validate_file_path_security: {
         Args: { p_file_path: string; p_user_id: string }
+        Returns: boolean
+      }
+      validate_invoice_gmail_ownership: {
+        Args: { p_gmail_message_id: string; p_user_id: string }
         Returns: boolean
       }
       validate_invoice_ownership: {
