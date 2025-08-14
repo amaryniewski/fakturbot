@@ -100,60 +100,109 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Found ${invoices.length} invoices to process`);
 
-    // Process first invoice as test
-    const invoice = invoices[0];
-    console.log(`Processing invoice: ${invoice.file_name}`);
-    
-    if (!invoice.file_url) {
-      console.error("No file URL for invoice:", invoice.id);
-      return new Response(JSON.stringify({ 
-        error: "Invoice has no file URL",
-        success: false 
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+    const results = [];
+    let successCount = 0;
+    let failureCount = 0;
+
+    // Process all invoices
+    for (const invoice of invoices) {
+      console.log(`=== PROCESSING INVOICE ${invoice.id} ===`);
+      console.log(`Processing invoice: ${invoice.file_name}`);
+      
+      try {
+        if (!invoice.file_url) {
+          console.error(`No file URL for invoice: ${invoice.id}`);
+          results.push({
+            invoice_id: invoice.id,
+            file_name: invoice.file_name,
+            success: false,
+            error: "No file URL"
+          });
+          failureCount++;
+          continue;
+        }
+
+        console.log(`Downloading file from: ${invoice.file_url}`);
+        const fileResponse = await fetch(invoice.file_url);
+        
+        if (!fileResponse.ok) {
+          console.error(`File download failed: ${fileResponse.status} ${fileResponse.statusText}`);
+          results.push({
+            invoice_id: invoice.id,
+            file_name: invoice.file_name,
+            success: false,
+            error: `Failed to download file: ${fileResponse.status}`
+          });
+          failureCount++;
+          continue;
+        }
+
+        const fileBuffer = await fileResponse.arrayBuffer();
+        console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
+
+        console.log("=== SENDING TO N8N WEBHOOK ===");
+        const formData = new FormData();
+        const blob = new Blob([fileBuffer], { type: 'application/pdf' });
+        formData.append('data', blob, invoice.file_name);
+        
+        console.log(`Sending to: ${webhookUrl}`);
+        const webhookResponse = await fetch(webhookUrl, {
+          method: "POST",
+          body: formData
+        });
+
+        console.log(`Webhook response: ${webhookResponse.status} ${webhookResponse.statusText}`);
+        const responseText = await webhookResponse.text();
+        console.log("Webhook response body:", responseText);
+
+        if (webhookResponse.ok) {
+          results.push({
+            invoice_id: invoice.id,
+            file_name: invoice.file_name,
+            success: true,
+            webhook_status: webhookResponse.status,
+            webhook_response: responseText
+          });
+          successCount++;
+          console.log(`✅ Successfully sent ${invoice.file_name} to N8N`);
+        } else {
+          results.push({
+            invoice_id: invoice.id,
+            file_name: invoice.file_name,
+            success: false,
+            error: `Webhook failed: ${webhookResponse.status}`,
+            webhook_response: responseText
+          });
+          failureCount++;
+          console.log(`❌ Failed to send ${invoice.file_name} to N8N: ${webhookResponse.status}`);
+        }
+
+      } catch (error: any) {
+        console.error(`Error processing invoice ${invoice.id}:`, error);
+        results.push({
+          invoice_id: invoice.id,
+          file_name: invoice.file_name,
+          success: false,
+          error: error.message || "Unknown error"
+        });
+        failureCount++;
+      }
     }
 
-    console.log(`Downloading file from: ${invoice.file_url}`);
-    const fileResponse = await fetch(invoice.file_url);
-    
-    if (!fileResponse.ok) {
-      console.error(`File download failed: ${fileResponse.status} ${fileResponse.statusText}`);
-      return new Response(JSON.stringify({ 
-        error: `Failed to download file: ${fileResponse.status}`,
-        success: false 
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
-    }
-
-    const fileBuffer = await fileResponse.arrayBuffer();
-    console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
-
-    console.log("=== SENDING TO N8N WEBHOOK ===");
-    const formData = new FormData();
-    const blob = new Blob([fileBuffer], { type: 'application/pdf' });
-    formData.append('data', blob, invoice.file_name);
-    
-    console.log(`Sending to: ${webhookUrl}`);
-    const webhookResponse = await fetch(webhookUrl, {
-      method: "POST",
-      body: formData
-    });
-
-    console.log(`Webhook response: ${webhookResponse.status} ${webhookResponse.statusText}`);
-    const responseText = await webhookResponse.text();
-    console.log("Webhook response body:", responseText);
+    console.log(`=== PROCESSING COMPLETE ===`);
+    console.log(`Total invoices: ${invoices.length}`);
+    console.log(`Successful: ${successCount}`);
+    console.log(`Failed: ${failureCount}`);
 
     return new Response(JSON.stringify({ 
-      success: true,
-      message: "PDF sent successfully",
-      webhook_status: webhookResponse.status,
-      webhook_response: responseText
+      success: successCount > 0,
+      message: `Processed ${invoices.length} invoices: ${successCount} successful, ${failureCount} failed`,
+      total_invoices: invoices.length,
+      successful_count: successCount,
+      failed_count: failureCount,
+      results: results
     }), {
-      status: 200,
+      status: successCount > 0 ? 200 : 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
 
