@@ -460,7 +460,13 @@ const Dashboard = () => {
               <Trash2 className="h-4 w-4" />
               Usuń wybrane ({selected.length})
             </Button>
-            <Button disabled={selected.length === 0} onClick={approveSelected}>
+            <Button 
+              disabled={selected.length === 0} 
+              onClick={() => {
+                console.log("🔥 PRZYCISK KLIKNIĘTY! Selected:", selected);
+                approveSelected();
+              }}
+            >
               Zatwierdź wybrane ({selected.length})
             </Button>
           </div>
