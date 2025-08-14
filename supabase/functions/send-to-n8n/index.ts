@@ -104,10 +104,16 @@ const handler = async (req: Request): Promise<Response> => {
           }
           
           if (fileData) {
-            // Convert blob to file and add to FormData
-            const file = new File([fileData], invoice.file_name, { type: 'application/pdf' });
-            formData.append(`file_${invoice.id}`, file);
-            console.log(`Added file ${invoice.file_name} to FormData`);
+            // Convert blob to ArrayBuffer, then to Uint8Array for FormData
+            const arrayBuffer = await fileData.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Create blob with proper PDF content type
+            const blob = new Blob([uint8Array], { type: 'application/pdf' });
+            
+            // Add binary file directly to FormData
+            formData.append(`file_${invoice.id}`, blob, invoice.file_name);
+            console.log(`Added binary PDF file ${invoice.file_name} (${uint8Array.length} bytes) to FormData`);
           }
         } catch (downloadError) {
           console.error(`Error downloading file for invoice ${invoice.id}:`, downloadError);
