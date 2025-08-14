@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface SendToN8nRequest {
   invoiceIds: string[];
-  webhookUrl: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -17,14 +16,19 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { invoiceIds, webhookUrl }: SendToN8nRequest = await req.json();
+    console.log("send-to-n8n function called");
+    const { invoiceIds }: SendToN8nRequest = await req.json();
+    console.log("Received invoiceIds:", invoiceIds);
     
     if (!invoiceIds || invoiceIds.length === 0) {
       throw new Error("No invoice IDs provided");
     }
 
+    // Get webhook URL from Supabase secrets
+    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
     if (!webhookUrl) {
-      throw new Error("No webhook URL provided");
+      throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
 
     const supabase = createClient(
@@ -67,21 +71,30 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Sending to n8n webhook:", webhookUrl);
     console.log("Payload:", JSON.stringify(n8nPayload, null, 2));
 
-    // Send to n8n webhook
+    // Send to n8n webhook with detailed logging
+    console.log("About to send POST request to:", webhookUrl);
+    
     const webhookResponse = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "User-Agent": "FakturBot/1.0",
       },
       body: JSON.stringify(n8nPayload),
     });
 
-    if (!webhookResponse.ok) {
-      throw new Error(`Webhook request failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
-    }
+    console.log("Webhook response status:", webhookResponse.status);
+    console.log("Webhook response statusText:", webhookResponse.statusText);
+    console.log("Webhook response headers:", Object.fromEntries(webhookResponse.headers.entries()));
 
     const webhookResult = await webhookResponse.text();
-    console.log("Webhook response:", webhookResult);
+    console.log("Webhook response body:", webhookResult);
+
+    if (!webhookResponse.ok) {
+      console.error("Webhook failed with status:", webhookResponse.status);
+      console.error("Response body:", webhookResult);
+      throw new Error(`Webhook request failed: ${webhookResponse.status} ${webhookResponse.statusText}. Response: ${webhookResult}`);
+    }
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -95,6 +108,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   } catch (error: any) {
     console.error("Error in send-to-n8n function:", error);
+    console.error("Error stack:", error.stack);
     return new Response(
       JSON.stringify({ 
         error: error.message,
