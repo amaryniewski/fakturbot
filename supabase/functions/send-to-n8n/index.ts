@@ -6,35 +6,60 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface SendToN8nRequest {
-  invoiceIds: string[];
-}
-
 const handler = async (req: Request): Promise<Response> => {
+  console.log("=== SEND-TO-N8N FUNCTION STARTING ===");
+  
   if (req.method === "OPTIONS") {
+    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log("=== SEND-TO-N8N FUNCTION START ===");
-    const { invoiceIds }: SendToN8nRequest = await req.json();
+    console.log("=== PARSING REQUEST BODY ===");
+    const requestBody = await req.text();
+    console.log("Raw request body:", requestBody);
+    
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(requestBody);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      return new Response(JSON.stringify({ 
+        error: "Invalid JSON in request body",
+        success: false 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    
+    const { invoiceIds } = parsedBody;
     console.log("Received invoiceIds:", invoiceIds);
     
-    if (!invoiceIds || invoiceIds.length === 0) {
-      console.error("ERROR: No invoice IDs provided");
-      throw new Error("No invoice IDs provided");
+    if (!invoiceIds || !Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+      console.error("Invalid invoiceIds:", invoiceIds);
+      return new Response(JSON.stringify({ 
+        error: "No valid invoice IDs provided",
+        success: false 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
-    // Get webhook URL from Supabase secrets
     console.log("=== CHECKING ENVIRONMENT VARIABLES ===");
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
     console.log("N8N_WEBHOOK_URL found:", !!webhookUrl);
-    console.log("N8N_WEBHOOK_URL value (first 50 chars):", webhookUrl ? webhookUrl.substring(0, 50) + "..." : "NOT FOUND");
+    console.log("SUPABASE_URL found:", !!supabaseUrl);
+    console.log("SUPABASE_SERVICE_ROLE_KEY found:", !!supabaseKey);
     
     if (!webhookUrl) {
-      console.error("ERROR: N8N_WEBHOOK_URL not found in environment");
+      console.error("N8N_WEBHOOK_URL not found");
       return new Response(JSON.stringify({ 
-        error: "N8N webhook URL not configured in Supabase secrets",
+        error: "N8N webhook URL not configured",
         success: false 
       }), {
         status: 500,
@@ -42,19 +67,10 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    console.log("=== INITIALIZING SUPABASE CLIENT ===");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    console.log("SUPABASE_URL found:", !!supabaseUrl);
-    console.log("SUPABASE_SERVICE_ROLE_KEY found:", !!supabaseKey);
+    console.log("=== CREATING SUPABASE CLIENT ===");
+    const supabase = createClient(supabaseUrl || "", supabaseKey || "");
 
-    const supabase = createClient(
-      supabaseUrl ?? "",
-      supabaseKey ?? ""
-    );
-
-    console.log("=== FETCHING INVOICES FROM DATABASE ===");
-    // Get invoice details
+    console.log("=== FETCHING INVOICES ===");
     const { data: invoices, error } = await supabase
       .from('invoices')
       .select('*')
@@ -62,110 +78,90 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (error) {
       console.error("Database error:", error);
-      throw error;
+      return new Response(JSON.stringify({ 
+        error: `Database error: ${error.message}`,
+        success: false 
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     if (!invoices || invoices.length === 0) {
       console.error("No invoices found for IDs:", invoiceIds);
-      throw new Error("No invoices found");
+      return new Response(JSON.stringify({ 
+        error: "No invoices found",
+        success: false 
+      }), {
+        status: 404,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
-    console.log(`Processing ${invoices.length} invoices`);
+    console.log(`Found ${invoices.length} invoices to process`);
 
-    // Process each invoice - download PDF and send to webhook
-    const results = [];
+    // Process first invoice as test
+    const invoice = invoices[0];
+    console.log(`Processing invoice: ${invoice.file_name}`);
     
-    for (const invoice of invoices) {
-      try {
-        console.log(`Processing invoice: ${invoice.file_name}`);
-        
-        if (!invoice.file_url) {
-          console.error(`No file URL for invoice: ${invoice.id}`);
-          results.push({ 
-            invoiceId: invoice.id, 
-            status: 'error', 
-            error: 'No file URL' 
-          });
-          continue;
-        }
-
-        // Download PDF file from Supabase Storage
-        console.log(`Downloading file from: ${invoice.file_url}`);
-        const fileResponse = await fetch(invoice.file_url);
-        
-        if (!fileResponse.ok) {
-          throw new Error(`Failed to download file: ${fileResponse.status} ${fileResponse.statusText}`);
-        }
-
-        const fileBuffer = await fileResponse.arrayBuffer();
-        console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
-
-        console.log(`Sending ${invoice.file_name} as FormData with field "data"...`);
-        
-        // Create FormData with PDF file in "data" field (as expected by N8N)
-        const formData = new FormData();
-        const blob = new Blob([fileBuffer], { type: 'application/pdf' });
-        formData.append('data', blob, invoice.file_name);
-        
-        // Send to N8N webhook with FormData
-        const webhookResponse = await fetch(webhookUrl, {
-          method: "POST",
-          headers: {
-            "User-Agent": "FakturBot/1.0",
-          },
-          body: formData
-        });
-
-        console.log(`Webhook response for ${invoice.file_name}: ${webhookResponse.status}`);
-        
-        if (!webhookResponse.ok) {
-          const errorText = await webhookResponse.text();
-          console.error(`Webhook error for ${invoice.file_name}:`, errorText);
-          results.push({ 
-            invoiceId: invoice.id, 
-            status: 'error', 
-            error: `Webhook error: ${webhookResponse.status}` 
-          });
-        } else {
-          const responseText = await webhookResponse.text();
-          console.log(`Webhook success for ${invoice.file_name}:`, responseText);
-          results.push({ 
-            invoiceId: invoice.id, 
-            status: 'success',
-            webhook_response: responseText
-          });
-        }
-
-      } catch (invoiceError: any) {
-        console.error(`Error processing invoice ${invoice.id}:`, invoiceError);
-        results.push({ 
-          invoiceId: invoice.id, 
-          status: 'error', 
-          error: invoiceError.message 
-        });
-      }
+    if (!invoice.file_url) {
+      console.error("No file URL for invoice:", invoice.id);
+      return new Response(JSON.stringify({ 
+        error: "Invoice has no file URL",
+        success: false 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
-    const successCount = results.filter(r => r.status === 'success').length;
-    const errorCount = results.filter(r => r.status === 'error').length;
+    console.log(`Downloading file from: ${invoice.file_url}`);
+    const fileResponse = await fetch(invoice.file_url);
+    
+    if (!fileResponse.ok) {
+      console.error(`File download failed: ${fileResponse.status} ${fileResponse.statusText}`);
+      return new Response(JSON.stringify({ 
+        error: `Failed to download file: ${fileResponse.status}`,
+        success: false 
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
 
-    console.log(`Completed: ${successCount} success, ${errorCount} errors`);
+    const fileBuffer = await fileResponse.arrayBuffer();
+    console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
+
+    console.log("=== SENDING TO N8N WEBHOOK ===");
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer], { type: 'application/pdf' });
+    formData.append('data', blob, invoice.file_name);
+    
+    console.log(`Sending to: ${webhookUrl}`);
+    const webhookResponse = await fetch(webhookUrl, {
+      method: "POST",
+      body: formData
+    });
+
+    console.log(`Webhook response: ${webhookResponse.status} ${webhookResponse.statusText}`);
+    const responseText = await webhookResponse.text();
+    console.log("Webhook response body:", responseText);
 
     return new Response(JSON.stringify({ 
       success: true,
-      processed_invoices: invoices.length,
-      successful_sends: successCount,
-      failed_sends: errorCount,
-      results: results
+      message: "PDF sent successfully",
+      webhook_status: webhookResponse.status,
+      webhook_response: responseText
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
 
   } catch (error: any) {
-    console.error("Error in send-to-n8n function:", error);
+    console.error("=== FUNCTION ERROR ===", error);
+    console.error("Error stack:", error.stack);
     return new Response(JSON.stringify({ 
-      error: error.message,
+      error: error.message || "Unknown error occurred",
       success: false 
     }), {
       status: 500,
