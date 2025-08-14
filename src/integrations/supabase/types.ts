@@ -945,6 +945,17 @@ export type Database = {
         Args: { p_action: string; p_record_id: string; p_table_name: string }
         Returns: undefined
       }
+      monitor_security_violations: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          affected_users: string[]
+          details: Json
+          recommended_action: string
+          severity: string
+          violation_count: number
+          violation_type: string
+        }[]
+      }
       revoke_connection: {
         Args: { p_connection_id: string; p_connection_type: string }
         Returns: boolean
