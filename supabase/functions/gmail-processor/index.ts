@@ -191,16 +191,7 @@ const handler = async (req: Request): Promise<Response> => {
                   console.error('Failed to create invoice:', invoiceError);
                   continue;
                 }
-                
-                // Trigger OCR processing
-                await supabase.functions.invoke('ocr-processor', {
-                  body: { 
-                    invoiceId: invoiceData.id, // Pass invoice ID instead of fileName
-                    userId: user_id 
-                  }
-                });
 
-                const invoiceData = await insertResponse.data;
                 if (invoiceData) {
                   totalProcessed++;
                   console.log(`Processed invoice: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
