@@ -74,49 +74,30 @@ const handler = async (req: Request): Promise<Response> => {
     
     formData.append('json', JSON.stringify(n8nPayload));
     
-    // Download and attach PDF files
+    // Download and attach PDF files directly from file_url
     for (const invoice of invoices) {
       if (invoice.file_url) {
         try {
-          console.log(`Downloading PDF for invoice ${invoice.id}: ${invoice.file_url}`);
+          console.log(`Fetching PDF directly for invoice ${invoice.id}: ${invoice.file_url}`);
           
-          // Extract file path from URL
-          let filePath;
-          if (invoice.file_url.includes('/storage/v1/object/public/invoices/')) {
-            filePath = invoice.file_url.split('/storage/v1/object/public/invoices/')[1];
-          } else if (invoice.file_url.includes('/invoices/')) {
-            filePath = invoice.file_url.split('/invoices/')[1];
-          } else {
-            console.error(`Invalid file URL format: ${invoice.file_url}`);
+          // Fetch file directly using the file_url
+          const fileResponse = await fetch(invoice.file_url);
+          
+          if (!fileResponse.ok) {
+            console.error(`Failed to fetch file for invoice ${invoice.id}: ${fileResponse.status} ${fileResponse.statusText}`);
             continue;
           }
           
-          console.log(`Extracted file path: ${filePath}`);
+          // Get file as blob
+          const fileBlob = await fileResponse.blob();
+          console.log(`Downloaded file ${invoice.file_name} (${fileBlob.size} bytes)`);
           
-          // Get file from Supabase Storage
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from('invoices')
-            .download(filePath);
+          // Add file directly to FormData with proper content type
+          formData.append(`file_${invoice.id}`, fileBlob, invoice.file_name);
+          console.log(`Added PDF file ${invoice.file_name} to FormData`);
           
-          if (downloadError) {
-            console.error(`Failed to download file for invoice ${invoice.id}:`, downloadError);
-            continue;
-          }
-          
-          if (fileData) {
-            // Convert blob to ArrayBuffer, then to Uint8Array for FormData
-            const arrayBuffer = await fileData.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            
-            // Create blob with proper PDF content type
-            const blob = new Blob([uint8Array], { type: 'application/pdf' });
-            
-            // Add binary file directly to FormData
-            formData.append(`file_${invoice.id}`, blob, invoice.file_name);
-            console.log(`Added binary PDF file ${invoice.file_name} (${uint8Array.length} bytes) to FormData`);
-          }
         } catch (downloadError) {
-          console.error(`Error downloading file for invoice ${invoice.id}:`, downloadError);
+          console.error(`Error fetching file for invoice ${invoice.id}:`, downloadError);
           // Continue with other files even if one fails
         }
       }
