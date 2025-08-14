@@ -24,21 +24,11 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("No invoice IDs provided");
     }
 
-    // Get webhook URL from Supabase secrets - with detailed logging
-    console.log("Checking for N8N_WEBHOOK_URL in environment...");
-    console.log("Available env vars:", Object.keys(Deno.env.toObject()));
-    
+    // Get webhook URL from Supabase secrets
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-    console.log("N8N_WEBHOOK_URL value:", webhookUrl ? `[FOUND] ${webhookUrl.substring(0, 30)}...` : "[NOT FOUND]");
+    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
     
     if (!webhookUrl) {
-      console.error("ERROR: N8N_WEBHOOK_URL not found in environment variables");
-      // Try alternative env var names that might exist
-      const altUrl = Deno.env.get("N8N_WEBHOOK") || Deno.env.get("WEBHOOK_URL");
-      if (altUrl) {
-        console.log("Found alternative webhook URL:", altUrl.substring(0, 30) + "...");
-        throw new Error(`N8N webhook URL not configured in Supabase secrets. Found alternative: ${altUrl}`);
-      }
       throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
 
@@ -61,44 +51,109 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("No invoices found");
     }
 
-    // Create simple JSON payload
-    const n8nPayload = {
-      timestamp: new Date().toISOString(),
-      action: 'approve_invoices',
-      invoices: invoices.map(invoice => ({
-        id: invoice.id,
-        file_name: invoice.file_name,
-        file_url: invoice.file_url,
-        sender_email: invoice.sender_email,
-        subject: invoice.subject,
-        received_at: invoice.received_at,
-        approved_at: invoice.approved_at
-      }))
-    };
-    
-    console.log("Sending to webhook:", webhookUrl);
-    console.log("Payload:", JSON.stringify(n8nPayload, null, 2));
+    console.log(`Processing ${invoices.length} invoices`);
 
-    // Send to webhook
-    const webhookResponse = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "FakturBot/1.0",
-      },
-      body: JSON.stringify(n8nPayload),
-    });
-
-    console.log("Webhook response status:", webhookResponse.status);
+    // Process each invoice - download PDF and send to webhook
+    const results = [];
     
-    const responseText = await webhookResponse.text();
-    console.log("Webhook response:", responseText);
+    for (const invoice of invoices) {
+      try {
+        console.log(`Processing invoice: ${invoice.file_name}`);
+        
+        if (!invoice.file_url) {
+          console.error(`No file URL for invoice: ${invoice.id}`);
+          results.push({ 
+            invoiceId: invoice.id, 
+            status: 'error', 
+            error: 'No file URL' 
+          });
+          continue;
+        }
+
+        // Download PDF file from Supabase Storage
+        console.log(`Downloading file from: ${invoice.file_url}`);
+        const fileResponse = await fetch(invoice.file_url);
+        
+        if (!fileResponse.ok) {
+          throw new Error(`Failed to download file: ${fileResponse.status} ${fileResponse.statusText}`);
+        }
+
+        const fileBuffer = await fileResponse.arrayBuffer();
+        console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
+
+        // Create FormData with PDF file and metadata
+        const formData = new FormData();
+        
+        // Add the PDF file
+        const blob = new Blob([fileBuffer], { type: 'application/pdf' });
+        formData.append('file', blob, invoice.file_name);
+        
+        // Add metadata as JSON
+        const metadata = {
+          invoice_id: invoice.id,
+          file_name: invoice.file_name,
+          sender_email: invoice.sender_email,
+          subject: invoice.subject,
+          received_at: invoice.received_at,
+          approved_at: invoice.approved_at,
+          approved_by: invoice.approved_by,
+          file_size: invoice.file_size
+        };
+        
+        formData.append('metadata', JSON.stringify(metadata));
+        
+        console.log(`Sending ${invoice.file_name} to webhook...`);
+        
+        // Send to N8N webhook
+        const webhookResponse = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "User-Agent": "FakturBot/1.0",
+          },
+          body: formData
+        });
+
+        console.log(`Webhook response for ${invoice.file_name}: ${webhookResponse.status}`);
+        
+        if (!webhookResponse.ok) {
+          const errorText = await webhookResponse.text();
+          console.error(`Webhook error for ${invoice.file_name}:`, errorText);
+          results.push({ 
+            invoiceId: invoice.id, 
+            status: 'error', 
+            error: `Webhook error: ${webhookResponse.status}` 
+          });
+        } else {
+          const responseText = await webhookResponse.text();
+          console.log(`Webhook success for ${invoice.file_name}:`, responseText);
+          results.push({ 
+            invoiceId: invoice.id, 
+            status: 'success',
+            webhook_response: responseText
+          });
+        }
+
+      } catch (invoiceError: any) {
+        console.error(`Error processing invoice ${invoice.id}:`, invoiceError);
+        results.push({ 
+          invoiceId: invoice.id, 
+          status: 'error', 
+          error: invoiceError.message 
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.status === 'success').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
+
+    console.log(`Completed: ${successCount} success, ${errorCount} errors`);
 
     return new Response(JSON.stringify({ 
       success: true,
-      sent_invoices: invoices.length,
-      webhook_status: webhookResponse.status,
-      webhook_response: responseText
+      processed_invoices: invoices.length,
+      successful_sends: successCount,
+      failed_sends: errorCount,
+      results: results
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
