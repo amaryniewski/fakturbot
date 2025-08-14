@@ -56,15 +56,21 @@ const handler = async (req: Request): Promise<Response> => {
       }
       
       try {
-        // Double validate connection ownership using our security function
+        // CRITICAL: Enhanced connection ownership validation
         const { data: isValidOwner } = await supabase
-          .rpc('validate_connection_ownership', { 
+          .rpc('validate_connection_ownership_enhanced', { 
             p_connection_id: connectionId, 
             p_user_id: user_id 
           });
         
         if (!isValidOwner) {
-          console.error(`❌ CRITICAL: Connection ${connectionId} ownership validation failed for user ${user_id}, skipping`);
+          console.error(`❌ CRITICAL SECURITY: Connection ${connectionId} ownership validation failed for user ${user_id}`);
+          await supabase.rpc('audit_user_data_access', {
+            p_user_id: user_id,
+            p_operation: 'connection_SECURITY_VIOLATION',
+            p_table_name: 'gmail_connections',
+            p_details: { connection_id: connectionId, attempted_by: 'gmail-processor' }
+          });
           continue;
         }
         
@@ -115,17 +121,31 @@ const handler = async (req: Request): Promise<Response> => {
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
           try {
-            // Check if we already processed this message for THIS user
+            // CRITICAL: Check if message was processed for ANY user (prevent cross-user duplicates)
             const { data: existingInvoice } = await supabase
               .from('invoices')
               .select('id, user_id')
               .eq('gmail_message_id', message.id)
-              .eq('user_id', user_id)
               .single();
             
             console.log(`Checking for existing invoice for message ${message.id} and user ${user_id}:`, existingInvoice);
 
             if (existingInvoice) {
+              // CRITICAL SECURITY CHECK: If invoice exists but for different user - BIG PROBLEM
+              if (existingInvoice.user_id !== user_id) {
+                console.error(`🚨 CRITICAL SECURITY VIOLATION: Message ${message.id} already processed for different user ${existingInvoice.user_id}, attempted by ${user_id}`);
+                await supabase.rpc('audit_user_data_access', {
+                  p_user_id: user_id,
+                  p_operation: 'message_SECURITY_CROSS_USER_VIOLATION',
+                  p_table_name: 'invoices',
+                  p_details: { 
+                    message_id: message.id, 
+                    existing_user: existingInvoice.user_id,
+                    attempted_user: user_id 
+                  }
+                });
+                continue;
+              }
               console.log(`Message ${message.id} already processed, skipping`);
               continue;
             }
@@ -192,12 +212,29 @@ const handler = async (req: Request): Promise<Response> => {
                   .from('invoices')
                   .getPublicUrl(fileName);
 
-                // Create invoice record with explicit user_id validation
-                console.log(`Creating invoice for user ${user_id}, email: ${email}, message: ${message.id}`);
+                // CRITICAL: Log invoice creation attempt with security audit
+                console.log(`✅ SECURITY VALIDATED: Creating invoice for user ${user_id}, email: ${email}, message: ${message.id}`);
+                await supabase.rpc('audit_user_data_access', {
+                  p_user_id: user_id,
+                  p_operation: 'invoice_creation_attempt',
+                  p_table_name: 'invoices',
+                  p_details: { 
+                    message_id: message.id,
+                    connection_email: email,
+                    source: 'gmail-processor'
+                  }
+                });
+
+                // Triple-check user_id before creating invoice
+                if (!user_id) {
+                  console.error(`🚨 CRITICAL: user_id is null for connection ${email}`);
+                  continue;
+                }
+
                 const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: user_id, // CRITICAL: This must match the Gmail connection owner
+                    user_id: user_id, // CRITICAL: This MUST match the connection owner
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -212,27 +249,41 @@ const handler = async (req: Request): Promise<Response> => {
                   .single();
 
                 if (invoiceError) {
-                  console.error('Failed to create invoice:', invoiceError);
+                  console.error(`❌ FAILED to create invoice for user ${user_id}:`, invoiceError);
+                  await supabase.rpc('audit_user_data_access', {
+                    p_user_id: user_id,
+                    p_operation: 'invoice_creation_SECURITY_FAILED',
+                    p_table_name: 'invoices',
+                    p_details: { 
+                      error: invoiceError.message,
+                      message_id: message.id,
+                      connection_email: email
+                    }
+                  });
                   continue;
                 }
 
                 if (invoiceData) {
-                  totalProcessed++;
-                  
-                  // Critical validation: ensure invoice was created for correct user
+                  // CRITICAL: Verify the created invoice has correct user_id
                   if (invoiceData.user_id !== user_id) {
-                    console.error(`❌ CRITICAL SECURITY ERROR: Invoice created for wrong user! Expected: ${user_id}, Got: ${invoiceData.user_id} - This should never happen with proper RLS!`);
-                    // Log security incident
-                    await supabase.rpc('log_data_access_attempt', {
+                    console.error(`🚨 CRITICAL SECURITY VIOLATION: Invoice created with wrong user_id! Expected: ${user_id}, Got: ${invoiceData.user_id}`);
+                    // Delete the incorrectly created invoice
+                    await supabase.from('invoices').delete().eq('id', invoiceData.id);
+                    await supabase.rpc('audit_user_data_access', {
                       p_user_id: user_id,
-                      p_action: 'SECURITY_VIOLATION_WRONG_USER_ID',
-                      p_resource_id: invoiceData.id,
-                      p_resource_type: 'invoice'
+                      p_operation: 'invoice_SECURITY_USER_ID_MISMATCH',
+                      p_table_name: 'invoices',
+                      p_details: { 
+                        expected_user: user_id,
+                        actual_user: invoiceData.user_id,
+                        invoice_id: invoiceData.id
+                      }
                     });
                     continue;
                   }
-                  
-                  console.log(`✅ CREATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
+
+                  totalProcessed++;
+                  console.log(`✅ SECURITY VALIDATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
                   
                   // Trigger OCR processing with proper parameters
                   try {

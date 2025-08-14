@@ -633,6 +633,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      audit_user_data_access: {
+        Args: {
+          p_details?: Json
+          p_operation: string
+          p_table_name: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       auto_process_gmail_emails: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -910,6 +919,10 @@ export type Database = {
         }[]
       }
       validate_connection_ownership: {
+        Args: { p_connection_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      validate_connection_ownership_enhanced: {
         Args: { p_connection_id: string; p_user_id: string }
         Returns: boolean
       }
