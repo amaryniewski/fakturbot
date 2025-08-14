@@ -243,18 +243,28 @@ const Dashboard = () => {
           
           const webhookResponse = await fetch(n8nWebhookUrl, {
             method: 'POST',
+            mode: 'cors',
             headers: {
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
             },
             body: JSON.stringify(payload)
           });
           
-          console.log(`📡 Webhook response for ${invoice.file_name}: Status ${webhookResponse.status}`);
+          console.log(`📡 Webhook response for ${invoice.file_name}: Status ${webhookResponse.status}, OK: ${webhookResponse.ok}`);
           
+          // Check if the response is ok or if it's a CORS issue
           if (!webhookResponse.ok) {
-            const responseText = await webhookResponse.text();
-            console.error(`❌ Webhook failed for ${invoice.file_name}: ${webhookResponse.status} - ${responseText}`);
-            throw new Error(`Webhook failed: ${webhookResponse.status} - ${responseText}`);
+            let errorMessage;
+            try {
+              const responseText = await webhookResponse.text();
+              errorMessage = `${webhookResponse.status} - ${responseText}`;
+              console.error(`❌ Webhook failed for ${invoice.file_name}: ${errorMessage}`);
+            } catch (textError) {
+              errorMessage = `${webhookResponse.status} - Unable to read response`;
+              console.error(`❌ Webhook failed for ${invoice.file_name}: ${errorMessage}`);
+            }
+            throw new Error(`Webhook failed: ${errorMessage}`);
           }
           
           const responseData = await webhookResponse.text();
