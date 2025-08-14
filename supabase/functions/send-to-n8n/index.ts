@@ -20,6 +20,14 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Request method:", req.method);
     console.log("Request URL:", req.url);
     
+    // DEBUG: Log all environment variables
+    console.log("=== ENVIRONMENT VARIABLES DEBUG ===");
+    const envKeys = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "N8N_WEBHOOK_URL"];
+    envKeys.forEach(key => {
+      const value = Deno.env.get(key);
+      console.log(`${key}:`, value ? `SET (${value.length} chars)` : "NOT SET");
+    });
+    
     const { invoiceIds }: SendToN8nRequest = await req.json();
     console.log("Received invoiceIds:", invoiceIds);
     
@@ -30,11 +38,14 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Get webhook URL from Supabase secrets
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
-    console.log("N8N_WEBHOOK_URL value:", webhookUrl ? `${webhookUrl.substring(0, 50)}...` : "MISSING");
+    console.log("N8N_WEBHOOK_URL lookup result:");
+    console.log("- exists:", !!webhookUrl);
+    console.log("- type:", typeof webhookUrl);
+    console.log("- value preview:", webhookUrl ? `${webhookUrl.substring(0, 50)}...` : "NULL/UNDEFINED");
     
     if (!webhookUrl) {
-      console.error("ERROR: N8N webhook URL not configured in Supabase secrets");
+      console.error("CRITICAL ERROR: N8N webhook URL not found in environment");
+      console.error("Available env keys:", Object.keys(Deno.env.toObject()));
       throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
 
