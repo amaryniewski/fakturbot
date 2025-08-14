@@ -982,10 +982,10 @@ export type Database = {
       validate_complete_data_isolation: {
         Args: Record<PropertyKey, never>
         Returns: {
-          details: Json
           isolation_status: string
+          potential_violations: Json
           table_name: string
-          violation_count: number
+          user_count: number
         }[]
       }
       validate_connection_ownership: {
@@ -995,6 +995,10 @@ export type Database = {
       validate_connection_ownership_enhanced: {
         Args: { p_connection_id: string; p_user_id: string }
         Returns: boolean
+      }
+      validate_edge_function_security: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       validate_file_path_security: {
         Args: { p_file_path: string; p_user_id: string }
