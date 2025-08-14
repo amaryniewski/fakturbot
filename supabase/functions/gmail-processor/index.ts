@@ -83,7 +83,52 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        const { access_token, email: tokenEmail } = tokenData[0];
+        let { access_token, refresh_token, email: tokenEmail, token_expires_at } = tokenData[0];
+        
+        // Check if token is expired and refresh if needed
+        const tokenExpiry = new Date(token_expires_at);
+        const isExpired = tokenExpiry <= new Date();
+        
+        if (isExpired && refresh_token) {
+          console.log(`🔄 Token expired for ${userEmail}, refreshing...`);
+          
+          // Refresh the token
+          const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: Deno.env.get('GOOGLE_CLIENT_ID')!,
+              client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET')!,
+              refresh_token: refresh_token,
+              grant_type: 'refresh_token'
+            })
+          });
+          
+          if (!refreshResponse.ok) {
+            console.error(`Failed to refresh token for ${userEmail}:`, await refreshResponse.text());
+            continue;
+          }
+          
+          const refreshData = await refreshResponse.json();
+          const newAccessToken = refreshData.access_token;
+          const expiresIn = refreshData.expires_in || 3600;
+          const newExpiryTime = new Date(Date.now() + expiresIn * 1000);
+          
+          // Update the token in database
+          await supabase.rpc('update_encrypted_gmail_tokens', {
+            p_connection_id: connectionId,
+            p_access_token: newAccessToken,
+            p_token_expires_at: newExpiryTime.toISOString()
+          });
+          
+          console.log(`✅ Token refreshed for ${userEmail}, expires at: ${newExpiryTime}`);
+          
+          // Use the new token
+          access_token = newAccessToken;
+        } else if (isExpired) {
+          console.error(`Token expired for ${userEmail} and no refresh token available`);
+          continue;
+        }
         
         // Get user's filter settings - use service role with proper user validation
         const { data: filterSettings } = await supabase
@@ -99,18 +144,22 @@ const handler = async (req: Request): Promise<Response> => {
         const searchToDate = toDate ? new Date(toDate) : new Date();
         
         // Use custom filter query if available, otherwise default
-        const baseQuery = filterSettings?.filter_query || 'has:attachment is:unread subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury';
+        const baseQuery = filterSettings?.filter_query || 'has:attachment subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury';
         const dateQuery = `after:${searchFromDate.toISOString().split('T')[0]} before:${searchToDate.toISOString().split('T')[0]}`;
         const query = `${baseQuery} ${dateQuery}`;
         
+        console.log(`🔍 Gmail search query: ${query}`);
         const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`;
+        console.log(`📧 Searching Gmail for ${userEmail} with URL: ${searchUrl}`);
         
         const searchResponse = await fetch(searchUrl, {
           headers: { Authorization: `Bearer ${access_token}` }
         });
 
         if (!searchResponse.ok) {
-          console.error(`Gmail API search failed for ${userEmail}:`, await searchResponse.text());
+          const errorText = await searchResponse.text();
+          console.error(`Gmail API search failed for ${userEmail}:`, errorText);
+          console.error(`Status: ${searchResponse.status}, Query: ${query}`);
           continue;
         }
 

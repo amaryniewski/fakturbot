@@ -10,7 +10,7 @@ interface GmailFilterSettings {
 
 export const useGmailFilterSettings = () => {
   const [settings, setSettings] = useState<GmailFilterSettings>({
-    filter_query: 'has:attachment is:unread subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury',
+    filter_query: 'has:attachment subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury',
     allowed_sender_emails: null
   });
   const [loading, setLoading] = useState(false);
