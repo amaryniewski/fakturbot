@@ -207,37 +207,26 @@ const Dashboard = () => {
 
         if (fetchError) throw fetchError;
 
-        // Start OCR processing for each invoice - simplified approach
+        // Start OCR processing for each invoice using n8n workflow
         const ocrPromises = approvedInvoices?.map(async (invoice) => {
           try {
             // Only start OCR if not already processed
             if (invoice.status === 'new' || invoice.status === 'failed') {
-              console.log(`Starting OCR for invoice ${invoice.id}: ${invoice.file_url}`);
+              console.log(`Starting n8n OCR for invoice ${invoice.id}: ${invoice.file_url}`);
               
-              // Use only OCR.space (it's working) and update invoice directly
-              const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('ocr-space', {
+              // Use n8n OCR processor instead of old functions
+              const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('n8n-ocr-processor', {
                 body: { 
                   invoiceId: invoice.id,
-                  invoiceUrl: invoice.file_url 
+                  invoiceUrl: invoice.file_url,
+                  userId: (await supabase.auth.getUser()).data.user?.id
                 }
               });
               
               if (ocrError) {
-                console.error(`OCR failed for invoice ${invoice.id}:`, ocrError);
+                console.error(`n8n OCR failed for invoice ${invoice.id}:`, ocrError);
               } else {
-                console.log(`OCR completed for invoice ${invoice.id}:`, ocrResult);
-                
-                // Wait a moment and trigger comparison
-                setTimeout(async () => {
-                  try {
-                    await supabase.functions.invoke('ocr-compare', {
-                      body: { invoiceId: invoice.id }
-                    });
-                    console.log(`OCR comparison triggered for invoice ${invoice.id}`);
-                  } catch (compareError) {
-                    console.error(`OCR comparison failed for invoice ${invoice.id}:`, compareError);
-                  }
-                }, 2000); // Wait 2 seconds
+                console.log(`n8n OCR completed for invoice ${invoice.id}:`, ocrResult);
               }
             }
           } catch (ocrError) {

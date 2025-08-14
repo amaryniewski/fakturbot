@@ -85,11 +85,12 @@ export function OCRDebugPanel() {
 
       if (error) throw error;
 
-      // Trigger OCR.space
-      const { error: ocrError } = await supabase.functions.invoke('ocr-space', {
+      // Use n8n OCR processor instead of old functions
+      const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('n8n-ocr-processor', {
         body: { 
           invoiceId: invoiceId,
-          invoiceUrl: fullInvoice.file_url 
+          invoiceUrl: fullInvoice.file_url,
+          userId: (await supabase.auth.getUser()).data.user?.id
         }
       });
 
@@ -97,18 +98,8 @@ export function OCRDebugPanel() {
         throw ocrError;
       }
 
-      // Wait and trigger comparison
-      setTimeout(async () => {
-        try {
-          await supabase.functions.invoke('ocr-compare', {
-            body: { invoiceId: invoiceId }
-          });
-          console.log(`Manual OCR comparison triggered for ${invoiceId}`);
-          fetchData(); // Refresh data
-        } catch (compareError) {
-          console.error('OCR comparison failed:', compareError);
-        }
-      }, 3000);
+      console.log(`Manual n8n OCR processing completed for ${invoiceId}:`, ocrResult);
+      fetchData(); // Refresh data immediately
 
     } catch (error: any) {
       console.error('Manual OCR error:', error);

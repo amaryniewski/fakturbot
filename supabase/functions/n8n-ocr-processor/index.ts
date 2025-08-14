@@ -42,11 +42,14 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const n8nWebhookUrl = Deno.env.get('N8N_WEBHOOK_URL');
+    // Hardcode n8n webhook URL as requested
+    const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
 
-    if (!supabaseUrl || !supabaseServiceKey || !n8nWebhookUrl) {
-      throw new Error('Missing required environment variables');
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing required Supabase environment variables');
     }
+
+    console.log('Using n8n webhook URL:', n8nWebhookUrl);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
