@@ -179,8 +179,9 @@ const Dashboard = () => {
   };
 
   const approveSelected = async () => {
-    console.log("approveSelected called with selected:", selected);
+    console.log("🚀 approveSelected called with selected:", selected);
     if (selected.length === 0) {
+      console.warn("❌ No invoices selected");
       toast({
         title: "Błąd",
         description: "Nie wybrano żadnej faktury",
@@ -190,55 +191,77 @@ const Dashboard = () => {
     }
     
     setProcessing(true);
+    console.log("⏳ Starting processing...");
     
     try {
       // Get user info
+      console.log("🔐 Getting user info...");
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
+        console.error("❌ User auth error:", userError);
         throw new Error('Błąd autoryzacji użytkownika');
       }
+      console.log("✅ User authenticated:", user.id);
 
       // Get selected invoices data
+      console.log("📄 Fetching invoice data for IDs:", selected);
       const { data: invoicesToSend, error: fetchError } = await supabase
         .from('invoices')
         .select('id, file_url, file_name')
         .in('id', selected);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("❌ Fetch error:", fetchError);
+        throw fetchError;
+      }
 
-      console.log(`Sending ${invoicesToSend?.length} invoices to webhook`);
+      console.log(`📊 Retrieved ${invoicesToSend?.length} invoices:`, invoicesToSend);
+
+      if (!invoicesToSend || invoicesToSend.length === 0) {
+        console.error("❌ No invoices found for selected IDs");
+        throw new Error('Nie znaleziono faktur do wysłania');
+      }
 
       // ONLY send to webhook - no database updates
       const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
+      console.log("🌐 Webhook URL:", n8nWebhookUrl);
       
       const webhookPromises = invoicesToSend?.map(async (invoice) => {
         try {
-          console.log(`Sending invoice to webhook: ${invoice.file_name}`);
+          console.log(`📤 Sending invoice to webhook: ${invoice.file_name} (${invoice.id})`);
+          
+          const payload = {
+            userId: user.id,
+            invoiceId: invoice.id,
+            invoiceUrl: invoice.file_url,
+            fileName: invoice.file_name,
+            source: 'fakturbot-dashboard',
+            timestamp: new Date().toISOString()
+          };
+          console.log("📦 Payload:", payload);
           
           const webhookResponse = await fetch(n8nWebhookUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              userId: user.id,
-              invoiceId: invoice.id,
-              invoiceUrl: invoice.file_url,
-              fileName: invoice.file_name,
-              source: 'fakturbot-dashboard',
-              timestamp: new Date().toISOString()
-            })
+            body: JSON.stringify(payload)
           });
           
+          console.log(`📡 Webhook response for ${invoice.file_name}: Status ${webhookResponse.status}`);
+          
           if (!webhookResponse.ok) {
-            throw new Error(`Webhook failed: ${webhookResponse.status}`);
+            const responseText = await webhookResponse.text();
+            console.error(`❌ Webhook failed for ${invoice.file_name}: ${webhookResponse.status} - ${responseText}`);
+            throw new Error(`Webhook failed: ${webhookResponse.status} - ${responseText}`);
           }
           
-          console.log(`Successfully sent invoice ${invoice.file_name} to webhook`);
+          const responseData = await webhookResponse.text();
+          console.log(`✅ Successfully sent invoice ${invoice.file_name} to webhook. Response:`, responseData);
           return { success: true, invoiceId: invoice.id };
           
         } catch (error) {
-          console.error(`Failed to send invoice ${invoice.id} to webhook:`, error);
+          console.error(`❌ Failed to send invoice ${invoice.id} (${invoice.file_name}) to webhook:`, error);
           return { success: false, invoiceId: invoice.id, error: error.message };
         }
       }) || [];
