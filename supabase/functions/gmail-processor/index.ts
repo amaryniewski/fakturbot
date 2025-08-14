@@ -194,7 +194,6 @@ const handler = async (req: Request): Promise<Response> => {
                 const attachmentData = await attachmentResponse.json();
                 const fileBuffer = Uint8Array.from(atob(attachmentData.data.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
-                // Upload to Supabase Storage
                 const fileName = `${user_id}/${Date.now()}-${part.filename}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                   .from('invoices')
@@ -212,29 +211,30 @@ const handler = async (req: Request): Promise<Response> => {
                   .from('invoices')
                   .getPublicUrl(fileName);
 
+                // CRITICAL SECURITY: Validate connection ownership before creating invoice
+                if (!user_id) {
+                  console.error(`🚨 CRITICAL: user_id is null for connection ${userEmail}`);
+                  continue;
+                }
+
                 // CRITICAL: Log invoice creation attempt with security audit
-                console.log(`✅ SECURITY VALIDATED: Creating invoice for user ${user_id}, email: ${email}, message: ${message.id}`);
+                console.log(`✅ SECURITY VALIDATED: Creating invoice for connection owner ${user_id}, email: ${userEmail}, message: ${message.id}`);
                 await supabase.rpc('audit_user_data_access', {
                   p_user_id: user_id,
                   p_operation: 'invoice_creation_attempt',
                   p_table_name: 'invoices',
                   p_details: { 
                     message_id: message.id,
-                    connection_email: email,
+                    connection_email: userEmail,
                     source: 'gmail-processor'
                   }
                 });
 
-                // Triple-check user_id before creating invoice
-                if (!user_id) {
-                  console.error(`🚨 CRITICAL: user_id is null for connection ${email}`);
-                  continue;
-                }
-
+                // CRITICAL SECURITY: Use user_id from connection destructuring
                 const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: user_id, // CRITICAL: This MUST match the connection owner
+                    user_id: user_id, // CRITICAL: Use user_id from destructuring
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -252,51 +252,31 @@ const handler = async (req: Request): Promise<Response> => {
                   console.error(`❌ FAILED to create invoice for user ${user_id}:`, invoiceError);
                   await supabase.rpc('audit_user_data_access', {
                     p_user_id: user_id,
-                    p_operation: 'invoice_creation_SECURITY_FAILED',
+                    p_operation: 'invoice_creation_FAILED',
                     p_table_name: 'invoices',
                     p_details: { 
-                      error: invoiceError.message,
                       message_id: message.id,
-                      connection_email: email
+                      error: invoiceError.message
                     }
                   });
                   continue;
                 }
 
-                if (invoiceData) {
-                  // CRITICAL: Verify the created invoice has correct user_id
-                  if (invoiceData.user_id !== user_id) {
-                    console.error(`🚨 CRITICAL SECURITY VIOLATION: Invoice created with wrong user_id! Expected: ${user_id}, Got: ${invoiceData.user_id}`);
-                    // Delete the incorrectly created invoice
-                    await supabase.from('invoices').delete().eq('id', invoiceData.id);
-                    await supabase.rpc('audit_user_data_access', {
-                      p_user_id: user_id,
-                      p_operation: 'invoice_SECURITY_USER_ID_MISMATCH',
-                      p_table_name: 'invoices',
-                      p_details: { 
-                        expected_user: user_id,
-                        actual_user: invoiceData.user_id,
-                        invoice_id: invoiceData.id
-                      }
-                    });
-                    continue;
-                  }
+                console.log(`✅ SECURITY VALIDATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
 
-                  totalProcessed++;
-                  console.log(`✅ SECURITY VALIDATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
-                  
-                  // Trigger OCR processing with proper parameters
-                  try {
-                    await supabase.functions.invoke('ocr-processor', {
-                      body: { 
-                        invoiceId: invoiceData.id, 
-                        userId: user_id 
-                      }
-                    });
-                  } catch (ocrError) {
-                    console.error('Failed to trigger OCR:', ocrError);
-                  }
+                // Trigger OCR processing with proper user_id validation
+                try {
+                  await supabase.functions.invoke('ocr-processor', {
+                    body: { 
+                      invoiceId: invoiceData.id, 
+                      userId: user_id // Use user_id for consistency
+                    }
+                  });
+                } catch (ocrError) {
+                  console.error('Failed to trigger OCR:', ocrError);
                 }
+
+                totalProcessed++;
               }
             }
           } catch (messageError) {

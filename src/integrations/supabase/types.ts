@@ -680,6 +680,13 @@ export type Database = {
         Args: { encrypted_value: string }
         Returns: string
       }
+      emergency_data_isolation_cleanup: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          cleaned_invoices: number
+          security_violations: Json
+        }[]
+      }
       encrypt_existing_tokens: {
         Args: Record<PropertyKey, never>
         Returns: {
