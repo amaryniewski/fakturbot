@@ -82,14 +82,13 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
     
-    // Add metadata as separate field
+    // Add minimal metadata (bez file_url żeby nie mylić n8n workflow)
     const n8nPayload = {
       timestamp: new Date().toISOString(),
       action: 'approve_invoices',
       invoices: invoices.map(invoice => ({
         id: invoice.id,
         file_name: invoice.file_name,
-        file_url: invoice.file_url,
         sender_email: invoice.sender_email,
         subject: invoice.subject,
         received_at: invoice.received_at,
@@ -101,7 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
       }))
     };
     
-    formData.append('metadata', JSON.stringify(n8nPayload));
+    formData.append('json', JSON.stringify(n8nPayload));
 
     console.log("Sending to n8n webhook:", webhookUrl);
     console.log("Payload:", JSON.stringify(n8nPayload, null, 2));
