@@ -731,7 +731,6 @@ export type Database = {
       get_all_active_gmail_connections_for_processing: {
         Args: Record<PropertyKey, never>
         Returns: {
-          created_at: string
           email: string
           id: string
           user_id: string
