@@ -180,104 +180,138 @@ const Dashboard = () => {
 
   const approveSelected = async () => {
     console.log("approveSelected called with selected:", selected);
-    if (selected.length === 0) return;
+    if (selected.length === 0) {
+      toast({
+        title: "Błąd",
+        description: "Nie wybrano żadnej faktury",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setProcessing(true);
     
     try {
-      // First, update the database to mark as approved
-      const { error } = await supabase
+      // First, get user info
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error('Błąd autoryzacji użytkownika');
+      }
+
+      // Get the invoices that will be approved
+      const { data: invoicesToApprove, error: fetchError } = await supabase
+        .from('invoices')
+        .select('id, file_url, status, file_name')
+        .in('id', selected);
+
+      if (fetchError) throw fetchError;
+
+      console.log(`Approving ${invoicesToApprove?.length} invoices:`, invoicesToApprove?.map(i => i.file_name));
+
+      // Update the database to mark as approved
+      const { error: updateError } = await supabase
         .from('invoices')
         .update({ 
           needs_review: false,
           approved_at: new Date().toISOString(),
-          approved_by: (await supabase.auth.getUser()).data.user?.id
+          approved_by: user.id,
+          status: 'processing'
         })
         .in('id', selected);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      // Start OCR processing for approved invoices using Supabase functions
-      console.log("Starting OCR processing for approved invoices...");
+      // Send invoices to n8n webhook
+      const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
       
-      try {
-        // Get the invoices that were just approved to start OCR
-        const { data: approvedInvoices, error: fetchError } = await supabase
-          .from('invoices')
-          .select('id, file_url, status')
-          .in('id', selected);
+      console.log(`Sending ${invoicesToApprove?.length} invoices to n8n webhook:`, n8nWebhookUrl);
 
-        if (fetchError) throw fetchError;
-
-        // Send invoices to n8n webhook directly - simplified approach
-        const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
-        
-        const webhookPromises = approvedInvoices?.map(async (invoice) => {
-          try {
-            // Only start OCR if not already processed
-            if (invoice.status === 'new' || invoice.status === 'failed') {
-              console.log(`Sending to n8n webhook: ${invoice.id} - ${invoice.file_url}`);
-              
-              // Update status to processing
-              await supabase
-                .from('invoices')
-                .update({ status: 'processing' })
-                .eq('id', invoice.id);
-              
-              // Send directly to n8n webhook
-              const webhookResponse = await fetch(n8nWebhookUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  userId: (await supabase.auth.getUser()).data.user?.id,
-                  invoiceId: invoice.id,
-                  invoiceUrl: invoice.file_url,
-                  source: 'fakturbot-dashboard'
-                })
-              });
-              
-              if (!webhookResponse.ok) {
-                throw new Error(`Webhook failed: ${webhookResponse.status}`);
-              }
-              
-              console.log(`Successfully sent invoice ${invoice.id} to n8n webhook`);
-            }
-          } catch (error) {
-            console.error(`Failed to send invoice ${invoice.id} to webhook:`, error);
-            // Update status back to failed
-            await supabase
-              .from('invoices')
-              .update({ status: 'failed' })
-              .eq('id', invoice.id);
+      const webhookPromises = invoicesToApprove?.map(async (invoice) => {
+        try {
+          console.log(`Sending invoice to webhook:`, {
+            id: invoice.id,
+            fileName: invoice.file_name,
+            fileUrl: invoice.file_url
+          });
+          
+          // Send to n8n webhook
+          const webhookResponse = await fetch(n8nWebhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userId: user.id,
+              invoiceId: invoice.id,
+              invoiceUrl: invoice.file_url,
+              fileName: invoice.file_name,
+              source: 'fakturbot-dashboard',
+              timestamp: new Date().toISOString()
+            })
+          });
+          
+          const responseText = await webhookResponse.text();
+          console.log(`Webhook response for ${invoice.id}:`, {
+            status: webhookResponse.status,
+            statusText: webhookResponse.statusText,
+            response: responseText
+          });
+          
+          if (!webhookResponse.ok) {
+            throw new Error(`Webhook failed: ${webhookResponse.status} - ${responseText}`);
           }
-        }) || [];
+          
+          console.log(`Successfully sent invoice ${invoice.id} (${invoice.file_name}) to n8n webhook`);
+          return { success: true, invoiceId: invoice.id };
+          
+        } catch (error) {
+          console.error(`Failed to send invoice ${invoice.id} to webhook:`, error);
+          
+          // Update status back to failed for this specific invoice
+          await supabase
+            .from('invoices')
+            .update({ status: 'failed' })
+            .eq('id', invoice.id);
+            
+          return { success: false, invoiceId: invoice.id, error: error.message };
+        }
+      }) || [];
 
-        // Wait for all webhook calls to complete
-        await Promise.allSettled(webhookPromises);
+      // Wait for all webhook calls to complete
+      const results = await Promise.allSettled(webhookPromises);
+      const resolvedResults = results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: 'Promise rejected' });
+      
+      const successCount = resolvedResults.filter(r => r.success).length;
+      const failedCount = resolvedResults.filter(r => !r.success).length;
 
+      console.log(`Webhook results: ${successCount} successful, ${failedCount} failed`);
+
+      if (successCount > 0) {
         toast({
           title: "Zatwierdzono!",
-          description: `${selected.length} faktur zostało wysłanych do n8n.`,
+          description: `${successCount} faktur zostało wysłanych do n8n${failedCount > 0 ? `, ${failedCount} nie udało się wysłać.` : '.'}`,
+          variant: failedCount > 0 ? "destructive" : "default"
         });
-
-      } catch (ocrError: any) {
-        console.error('OCR processing error:', ocrError);
+      } else {
         toast({
-          title: "Ostrzeżenie", 
-          description: `Wystąpił problem z wysłaniem faktur do n8n.`,
+          title: "Błąd",
+          description: "Nie udało się wysłać żadnej faktury do n8n",
           variant: "destructive",
         });
       }
 
       setSelected([]);
       fetchInvoices();
+      
     } catch (error: any) {
       console.error('Error approving invoices:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się zatwierdzić faktur",
+        description: error.message || "Nie udało się zatwierdzić faktur",
         variant: "destructive",
       });
+    } finally {
+      setProcessing(false);
     }
   };
 
