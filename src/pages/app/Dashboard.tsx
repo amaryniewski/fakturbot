@@ -192,49 +192,29 @@ const Dashboard = () => {
     setProcessing(true);
     
     try {
-      // First, get user info
+      // Get user info
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         throw new Error('Błąd autoryzacji użytkownika');
       }
 
-      // Get the invoices that will be approved
-      const { data: invoicesToApprove, error: fetchError } = await supabase
+      // Get selected invoices data
+      const { data: invoicesToSend, error: fetchError } = await supabase
         .from('invoices')
-        .select('id, file_url, status, file_name')
+        .select('id, file_url, file_name')
         .in('id', selected);
 
       if (fetchError) throw fetchError;
 
-      console.log(`Approving ${invoicesToApprove?.length} invoices:`, invoicesToApprove?.map(i => i.file_name));
+      console.log(`Sending ${invoicesToSend?.length} invoices to webhook`);
 
-      // Update the database to mark as approved
-      const { error: updateError } = await supabase
-        .from('invoices')
-        .update({ 
-          needs_review: false,
-          approved_at: new Date().toISOString(),
-          approved_by: user.id,
-          status: 'processing'
-        })
-        .in('id', selected);
-
-      if (updateError) throw updateError;
-
-      // Send invoices to n8n webhook
+      // ONLY send to webhook - no database updates
       const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
       
-      console.log(`Sending ${invoicesToApprove?.length} invoices to n8n webhook:`, n8nWebhookUrl);
-
-      const webhookPromises = invoicesToApprove?.map(async (invoice) => {
+      const webhookPromises = invoicesToSend?.map(async (invoice) => {
         try {
-          console.log(`Sending invoice to webhook:`, {
-            id: invoice.id,
-            fileName: invoice.file_name,
-            fileUrl: invoice.file_url
-          });
+          console.log(`Sending invoice to webhook: ${invoice.file_name}`);
           
-          // Send to n8n webhook
           const webhookResponse = await fetch(n8nWebhookUrl, {
             method: 'POST',
             headers: {
@@ -250,29 +230,15 @@ const Dashboard = () => {
             })
           });
           
-          const responseText = await webhookResponse.text();
-          console.log(`Webhook response for ${invoice.id}:`, {
-            status: webhookResponse.status,
-            statusText: webhookResponse.statusText,
-            response: responseText
-          });
-          
           if (!webhookResponse.ok) {
-            throw new Error(`Webhook failed: ${webhookResponse.status} - ${responseText}`);
+            throw new Error(`Webhook failed: ${webhookResponse.status}`);
           }
           
-          console.log(`Successfully sent invoice ${invoice.id} (${invoice.file_name}) to n8n webhook`);
+          console.log(`Successfully sent invoice ${invoice.file_name} to webhook`);
           return { success: true, invoiceId: invoice.id };
           
         } catch (error) {
           console.error(`Failed to send invoice ${invoice.id} to webhook:`, error);
-          
-          // Update status back to failed for this specific invoice
-          await supabase
-            .from('invoices')
-            .update({ status: 'failed' })
-            .eq('id', invoice.id);
-            
           return { success: false, invoiceId: invoice.id, error: error.message };
         }
       }) || [];
@@ -284,11 +250,9 @@ const Dashboard = () => {
       const successCount = resolvedResults.filter(r => r.success).length;
       const failedCount = resolvedResults.filter(r => !r.success).length;
 
-      console.log(`Webhook results: ${successCount} successful, ${failedCount} failed`);
-
       if (successCount > 0) {
         toast({
-          title: "Zatwierdzono!",
+          title: "Wysłano!",
           description: `${successCount} faktur zostało wysłanych do n8n${failedCount > 0 ? `, ${failedCount} nie udało się wysłać.` : '.'}`,
           variant: failedCount > 0 ? "destructive" : "default"
         });
@@ -301,13 +265,12 @@ const Dashboard = () => {
       }
 
       setSelected([]);
-      fetchInvoices();
       
     } catch (error: any) {
-      console.error('Error approving invoices:', error);
+      console.error('Error sending invoices to webhook:', error);
       toast({
         title: "Błąd",
-        description: error.message || "Nie udało się zatwierdzić faktur",
+        description: error.message || "Nie udało się wysłać faktur",
         variant: "destructive",
       });
     } finally {
