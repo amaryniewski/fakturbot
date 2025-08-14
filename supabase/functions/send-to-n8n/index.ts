@@ -33,8 +33,9 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     
-    const { invoiceIds } = parsedBody;
+    const { invoiceIds, webhookUrl } = parsedBody;
     console.log("Received invoiceIds:", invoiceIds);
+    console.log("Received webhookUrl:", webhookUrl);
     
     if (!invoiceIds || !Array.isArray(invoiceIds) || invoiceIds.length === 0) {
       console.error("Invalid invoiceIds:", invoiceIds);
@@ -47,25 +48,23 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    console.log("=== CHECKING ENVIRONMENT VARIABLES ===");
-    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    console.log("N8N_WEBHOOK_URL found:", !!webhookUrl);
-    console.log("SUPABASE_URL found:", !!supabaseUrl);
-    console.log("SUPABASE_SERVICE_ROLE_KEY found:", !!supabaseKey);
-    
     if (!webhookUrl) {
-      console.error("N8N_WEBHOOK_URL not found");
+      console.error("No webhook URL provided");
       return new Response(JSON.stringify({ 
-        error: "N8N webhook URL not configured",
+        error: "No webhook URL provided. Please configure N8N webhook URL.",
         success: false 
       }), {
-        status: 500,
+        status: 400,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
+
+    console.log("=== CHECKING ENVIRONMENT VARIABLES ===");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    console.log("SUPABASE_URL found:", !!supabaseUrl);
+    console.log("SUPABASE_SERVICE_ROLE_KEY found:", !!supabaseKey);
 
     console.log("=== CREATING SUPABASE CLIENT ===");
     const supabase = createClient(supabaseUrl || "", supabaseKey || "");

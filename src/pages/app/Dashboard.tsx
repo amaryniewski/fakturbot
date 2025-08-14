@@ -213,7 +213,8 @@ const Dashboard = () => {
         
         const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
           body: {
-            invoiceIds: selected
+            invoiceIds: selected,
+            webhookUrl: "https://your-n8n-webhook-url.com/webhook" // TODO: Get this from settings
           }
         });
         console.log("send-to-n8n response:", { data, webhookError });
