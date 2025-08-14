@@ -83,7 +83,7 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        let { access_token, refresh_token, email: tokenEmail, token_expires_at } = tokenData[0];
+        let { access_token, refresh_token, email: tokenEmail, token_expires_at, user_id: tokenUserId } = tokenData[0];
         
         // Check if token is expired and refresh if needed
         const tokenExpiry = new Date(token_expires_at);
@@ -184,7 +184,7 @@ const handler = async (req: Request): Promise<Response> => {
               if (existingInvoice.user_id !== user_id) {
                 console.error(`🚨 CRITICAL SECURITY VIOLATION: Message ${message.id} already processed for different user ${existingInvoice.user_id}, attempted by ${user_id}`);
                 await supabase.rpc('audit_user_data_access', {
-                  p_user_id: user_id,
+                    p_user_id: tokenUserId,
                   p_operation: 'message_SECURITY_CROSS_USER_VIOLATION',
                   p_table_name: 'invoices',
                   p_details: { 
@@ -243,7 +243,7 @@ const handler = async (req: Request): Promise<Response> => {
                 const attachmentData = await attachmentResponse.json();
                 const fileBuffer = Uint8Array.from(atob(attachmentData.data.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
-                const fileName = `${user_id}/${Date.now()}-${part.filename}`;
+                const fileName = `${tokenUserId}/${Date.now()}-${part.filename}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                   .from('invoices')
                   .upload(fileName, fileBuffer, {
@@ -261,15 +261,15 @@ const handler = async (req: Request): Promise<Response> => {
                   .getPublicUrl(fileName);
 
                 // CRITICAL SECURITY: Validate connection ownership before creating invoice
-                if (!user_id) {
-                  console.error(`🚨 CRITICAL: user_id is null for connection ${userEmail}`);
+                if (!tokenUserId) {
+                  console.error(`🚨 CRITICAL: tokenUserId is null for connection ${userEmail}`);
                   continue;
                 }
 
                 // CRITICAL: Log invoice creation attempt with security audit
-                console.log(`✅ SECURITY VALIDATED: Creating invoice for connection owner ${user_id}, email: ${userEmail}, message: ${message.id}`);
+                console.log(`✅ SECURITY VALIDATED: Creating invoice for connection owner ${tokenUserId}, email: ${userEmail}, message: ${message.id}`);
                 await supabase.rpc('audit_user_data_access', {
-                  p_user_id: user_id,
+                  p_user_id: tokenUserId,
                   p_operation: 'invoice_creation_attempt',
                   p_table_name: 'invoices',
                   p_details: { 
@@ -283,7 +283,7 @@ const handler = async (req: Request): Promise<Response> => {
                 const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: user_id, // CRITICAL: Use user_id from destructuring
+                    user_id: tokenUserId, // CRITICAL: Use user_id from token function for absolute isolation
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -298,9 +298,9 @@ const handler = async (req: Request): Promise<Response> => {
                   .single();
 
                 if (invoiceError) {
-                  console.error(`❌ FAILED to create invoice for user ${user_id}:`, invoiceError);
+                  console.error(`❌ FAILED to create invoice for user ${tokenUserId}:`, invoiceError);
                   await supabase.rpc('audit_user_data_access', {
-                    p_user_id: user_id,
+                    p_user_id: tokenUserId,
                     p_operation: 'invoice_creation_FAILED',
                     p_table_name: 'invoices',
                     p_details: { 
