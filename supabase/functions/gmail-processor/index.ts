@@ -170,32 +170,33 @@ const handler = async (req: Request): Promise<Response> => {
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
           try {
-            // CRITICAL: Check if message was processed for ANY user (prevent cross-user duplicates)
+            // CRITICAL: Check if message was processed for ANY user BEFORE processing (prevent cross-user duplicates)
             const { data: existingInvoice } = await supabase
               .from('invoices')
               .select('id, user_id')
               .eq('gmail_message_id', message.id)
-              .single();
+              .maybeSingle();
             
             console.log(`Checking for existing invoice for message ${message.id} and user ${user_id}:`, existingInvoice);
 
             if (existingInvoice) {
-              // CRITICAL SECURITY CHECK: If invoice exists but for different user - BIG PROBLEM
-              if (existingInvoice.user_id !== user_id) {
-                console.error(`🚨 CRITICAL SECURITY VIOLATION: Message ${message.id} already processed for different user ${existingInvoice.user_id}, attempted by ${user_id}`);
+              // CRITICAL SECURITY CHECK: If invoice exists but for different user - this is expected for shared/forwarded emails
+              if (existingInvoice.user_id !== tokenUserId) {
+                console.log(`⚠️ CROSS-USER MESSAGE DETECTED: Message ${message.id} already processed for user ${existingInvoice.user_id}, skipping for user ${tokenUserId} (this is normal for forwarded/shared emails)`);
                 await supabase.rpc('audit_user_data_access', {
-                    p_user_id: tokenUserId,
-                  p_operation: 'message_SECURITY_CROSS_USER_VIOLATION',
+                  p_user_id: tokenUserId,
+                  p_operation: 'message_cross_user_skipped',
                   p_table_name: 'invoices',
                   p_details: { 
                     message_id: message.id, 
                     existing_user: existingInvoice.user_id,
-                    attempted_user: user_id 
+                    skipped_user: tokenUserId,
+                    reason: 'message_already_processed'
                   }
                 });
                 continue;
               }
-              console.log(`Message ${message.id} already processed, skipping`);
+              console.log(`Message ${message.id} already processed for current user ${tokenUserId}, skipping`);
               continue;
             }
 
