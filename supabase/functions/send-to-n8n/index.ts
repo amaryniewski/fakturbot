@@ -16,18 +16,25 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    console.log("send-to-n8n function called");
+    console.log("=== SEND-TO-N8N FUNCTION START ===");
+    console.log("Request method:", req.method);
+    console.log("Request URL:", req.url);
+    
     const { invoiceIds }: SendToN8nRequest = await req.json();
     console.log("Received invoiceIds:", invoiceIds);
     
     if (!invoiceIds || invoiceIds.length === 0) {
+      console.error("ERROR: No invoice IDs provided");
       throw new Error("No invoice IDs provided");
     }
 
     // Get webhook URL from Supabase secrets
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
     console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
+    console.log("N8N_WEBHOOK_URL value:", webhookUrl ? `${webhookUrl.substring(0, 50)}...` : "MISSING");
+    
     if (!webhookUrl) {
+      console.error("ERROR: N8N webhook URL not configured in Supabase secrets");
       throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
 
