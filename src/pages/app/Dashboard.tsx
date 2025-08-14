@@ -9,9 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
-import { SecurityAlert } from "@/components/SecurityAlert";
-import { OCRDebugPanel } from "@/components/OCRDebugPanel";
-import { Trash2 } from "lucide-react";
 
 type Invoice = {
   id: string;
@@ -79,7 +76,6 @@ const statusBadge = (s: Item["status"]) => {
 };
 
 const Dashboard = () => {
-  console.log("🏠 Dashboard component loaded");
   const { toast } = useToast();
   const { processGmailInvoices, loading: gmailLoading } = useGmailIntegration();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -87,36 +83,24 @@ const Dashboard = () => {
   const [processing, setProcessing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [n8nWebhookUrl, setN8nWebhookUrl] = useState("");
   const [fromDate, setFromDate] = useState(() => {
     // Default to 7 days ago
     const date = new Date();
     date.setDate(date.getDate() - 7);
     return date.toISOString().split('T')[0];
   });
-  const [toDate, setToDate] = useState(() => {
-    // Default to today
-    return new Date().toISOString().split('T')[0];
-  });
   
   useEffect(() => { document.title = "FakturBot – Dashboard"; }, []);
 
   const fetchInvoices = async () => {
     try {
-      // Check if user is authenticated
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('User not authenticated');
-        return;
-      }
-
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
-        .eq('user_id', user.id)
         .order('received_at', { ascending: false });
 
       if (error) throw error;
-      console.log('Fetched invoices:', data?.length);
       setInvoices(data || []);
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
@@ -133,14 +117,12 @@ const Dashboard = () => {
   const processGmailEmails = async () => {
     setProcessing(true);
     try {
-      const result = await processGmailInvoices(fromDate, toDate);
+      const result = await processGmailInvoices(fromDate);
       
       toast({
         title: "Sukces",
-        description: `Przetworzono ${result.processedInvoices} nowych faktur z Gmail. OCR zostanie uruchomiony automatycznie.`,
+        description: `Przetworzono ${result.processedInvoices} nowych faktur z Gmail`,
       });
-
-      // OCR notifications are now handled by real-time updates system
       
       fetchInvoices();
     } catch (error: any) {
@@ -150,249 +132,74 @@ const Dashboard = () => {
     }
   };
 
-  const deleteSelected = async () => {
+  const approveSelected = async () => {
     if (selected.length === 0) return;
     
     try {
-      // Delete from database
+      // First, update the database to mark as approved
       const { error } = await supabase
         .from('invoices')
-        .delete()
+        .update({ 
+          needs_review: false,
+          approved_at: new Date().toISOString(),
+          approved_by: (await supabase.auth.getUser()).data.user?.id
+        })
         .in('id', selected);
 
       if (error) throw error;
 
-      toast({
-        title: "Usunięto",
-        description: `Usunięto ${selected.length} faktur`,
-      });
+      // Then send to n8n webhook if URL is provided
+      if (n8nWebhookUrl.trim()) {
+        try {
+          const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
+            body: {
+              invoiceIds: selected,
+              webhookUrl: n8nWebhookUrl.trim()
+            }
+          });
+
+          if (webhookError) {
+            console.error('Webhook error:', webhookError);
+            toast({
+              title: "Ostrzeżenie",
+              description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message}`,
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Sukces",
+              description: `Zatwierdzono ${selected.length} faktur i wysłano do n8n`,
+            });
+          }
+        } catch (webhookError: any) {
+          console.error('Webhook error:', webhookError);
+          toast({
+            title: "Ostrzeżenie", 
+            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message}`,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Zatwierdzono",
+          description: `Zatwierdzono ${selected.length} faktur`,
+        });
+      }
 
       setSelected([]);
       fetchInvoices();
     } catch (error: any) {
-      console.error('Error deleting invoices:', error);
+      console.error('Error approving invoices:', error);
       toast({
         title: "Błąd",
-        description: "Nie udało się usunąć faktur",
+        description: "Nie udało się zatwierdzić faktur",
         variant: "destructive",
       });
-    }
-  };
-
-  const approveSelected = async () => {
-    console.log("🚀 approveSelected called with selected:", selected);
-    if (selected.length === 0) {
-      console.warn("❌ No invoices selected");
-      toast({
-        title: "Błąd",
-        description: "Nie wybrano żadnej faktury",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setProcessing(true);
-    console.log("⏳ Starting processing...");
-    
-    try {
-      // Get user info
-      console.log("🔐 Getting user info...");
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        console.error("❌ User auth error:", userError);
-        throw new Error('Błąd autoryzacji użytkownika');
-      }
-      console.log("✅ User authenticated:", user.id);
-
-      // Get selected invoices data
-      console.log("📄 Fetching invoice data for IDs:", selected);
-      const { data: invoicesToSend, error: fetchError } = await supabase
-        .from('invoices')
-        .select('id, file_url, file_name')
-        .in('id', selected);
-
-      if (fetchError) {
-        console.error("❌ Fetch error:", fetchError);
-        throw fetchError;
-      }
-
-      console.log(`📊 Retrieved ${invoicesToSend?.length} invoices:`, invoicesToSend);
-
-      if (!invoicesToSend || invoicesToSend.length === 0) {
-        console.error("❌ No invoices found for selected IDs");
-        throw new Error('Nie znaleziono faktur do wysłania');
-      }
-
-      // ONLY send to webhook - no database updates
-      const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
-      console.log("🌐 Webhook URL:", n8nWebhookUrl);
-      
-      const webhookPromises = invoicesToSend?.map(async (invoice) => {
-        try {
-          console.log(`📤 Sending invoice to webhook: ${invoice.file_name} (${invoice.id})`);
-          
-          if (!invoice.file_url) {
-            throw new Error(`Invoice ${invoice.file_name} has no file URL`);
-          }
-
-          // Fetch the actual PDF file from Supabase Storage with timeout
-          console.log(`🔄 Fetching PDF file from: ${invoice.file_url}`);
-          
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
-          
-          const fileResponse = await fetch(invoice.file_url, {
-            signal: controller.signal,
-            method: 'GET',
-            headers: {
-              'Accept': 'application/pdf,*/*'
-            }
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (!fileResponse.ok) {
-            throw new Error(`Failed to fetch file: ${fileResponse.status} ${fileResponse.statusText}`);
-          }
-
-          const fileBlob = await fileResponse.blob();
-          console.log(`✅ File fetched: ${fileBlob.size} bytes, type: ${fileBlob.type}`);
-
-          // Create FormData with binary file data
-          const formData = new FormData();
-          formData.append('data', fileBlob, invoice.file_name); // n8n expects 'data' field
-          formData.append('userId', user.id);
-          formData.append('invoiceId', invoice.id);
-          formData.append('fileName', invoice.file_name);
-          formData.append('source', 'fakturbot-dashboard');
-          formData.append('timestamp', new Date().toISOString());
-
-          console.log(`📦 Sending FormData with file: ${invoice.file_name} (${fileBlob.size} bytes)`);
-          
-          const webhookController = new AbortController();
-          const webhookTimeoutId = setTimeout(() => webhookController.abort(), 60000); // 60s timeout for webhook
-          
-          const webhookResponse = await fetch(n8nWebhookUrl, {
-            method: 'POST',
-            signal: webhookController.signal,
-            body: formData // Send FormData with 'data' field as n8n expects
-          });
-          
-          clearTimeout(webhookTimeoutId);
-          
-          console.log(`📡 Webhook response for ${invoice.file_name}: Status ${webhookResponse.status}, OK: ${webhookResponse.ok}`);
-          
-          if (!webhookResponse.ok) {
-            let errorMessage;
-            try {
-              const responseText = await webhookResponse.text();
-              errorMessage = `${webhookResponse.status} - ${responseText}`;
-              console.error(`❌ Webhook failed for ${invoice.file_name}: ${errorMessage}`);
-            } catch (textError) {
-              errorMessage = `${webhookResponse.status} - Unable to read response`;
-              console.error(`❌ Webhook failed for ${invoice.file_name}: ${errorMessage}`);
-            }
-            throw new Error(`Webhook failed: ${errorMessage}`);
-          }
-          
-          const responseData = await webhookResponse.text();
-          console.log(`✅ Successfully sent PDF ${invoice.file_name} to n8n. Response:`, responseData);
-          return { success: true, invoiceId: invoice.id };
-          
-        } catch (error) {
-          console.error(`❌ Failed to send invoice ${invoice.id} (${invoice.file_name}) to webhook:`, error);
-          return { success: false, invoiceId: invoice.id, error: error.message };
-        }
-      }) || [];
-
-      // Wait for all webhook calls to complete
-      const results = await Promise.allSettled(webhookPromises);
-      const resolvedResults = results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: 'Promise rejected' });
-      
-      const successCount = resolvedResults.filter(r => r.success).length;
-      const failedCount = resolvedResults.filter(r => !r.success).length;
-
-      if (successCount > 0) {
-        toast({
-          title: "Wysłano!",
-          description: `${successCount} faktur zostało wysłanych do n8n${failedCount > 0 ? `, ${failedCount} nie udało się wysłać.` : '.'}`,
-          variant: failedCount > 0 ? "destructive" : "default"
-        });
-      } else {
-        toast({
-          title: "Błąd",
-          description: "Nie udało się wysłać żadnej faktury do n8n",
-          variant: "destructive",
-        });
-      }
-
-      setSelected([]);
-      
-    } catch (error: any) {
-      console.error('Error sending invoices to webhook:', error);
-      toast({
-        title: "Błąd",
-        description: error.message || "Nie udało się wysłać faktur",
-        variant: "destructive",
-      });
-    } finally {
-      setProcessing(false);
     }
   };
 
   useEffect(() => {
     fetchInvoices();
-
-    // Real-time subscription for invoice status changes
-    const channel = supabase
-      .channel('dashboard-invoice-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'invoices'
-        },
-        (payload) => {
-          console.log('Invoice change detected:', payload);
-          
-          // Show toast notifications for status changes
-          if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
-            const fileName = payload.new.file_name;
-            const newStatus = payload.new.status;
-            
-            switch (newStatus) {
-              case 'processing':
-                toast({
-                  title: "Przetwarzanie rozpoczęte",
-                  description: `Faktura ${fileName} jest teraz przetwarzana`,
-                });
-                break;
-              case 'success':
-                toast({
-                  title: "Przetwarzanie zakończone",
-                  description: `Faktura ${fileName} została pomyślnie przetworzona`,
-                });
-                break;
-              case 'failed':
-                toast({
-                  title: "Błąd przetwarzania",
-                  description: `Faktura ${fileName} nie mogła zostać przetworzona`,
-                  variant: "destructive",
-                });
-                break;
-            }
-          }
-          
-          // Refresh the invoice list
-          fetchInvoices();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   // Convert invoices to display format
@@ -433,28 +240,18 @@ const Dashboard = () => {
   const selectedItem = useMemo(() => data.find((d) => d.id === previewId) ?? null, [previewId]);
 
   return (
-    <div className="space-y-4">
-      <SecurityAlert />
-      <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4 h-[calc(100vh-120px)]">
+    <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr] gap-4 h-[calc(100vh-120px)]">
       <article className="rounded-lg border bg-card shadow overflow-hidden flex flex-col max-h-full">
         {/* Date filter and controls at the top */}
         <div className="border-b bg-card p-3 space-y-3 flex-shrink-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Od:</Label>
+              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
               <Input
                 id="topFromDate"
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-auto text-sm"
-              />
-              <Label htmlFor="topToDate" className="text-sm whitespace-nowrap">Do:</Label>
-              <Input
-                id="topToDate"
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
                 className="w-auto text-sm"
               />
               <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading} size="sm">
@@ -466,23 +263,19 @@ const Dashboard = () => {
             </div>
             <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
           </div>
-          <div className="flex items-center justify-end gap-2">
-            <Button 
-              variant="outline" 
-              disabled={selected.length === 0} 
-              onClick={deleteSelected}
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Usuń wybrane ({selected.length})
-            </Button>
-            <Button 
-              disabled={selected.length === 0} 
-              onClick={() => {
-                console.log("🔥 PRZYCISK KLIKNIĘTY! Selected:", selected);
-                approveSelected();
-              }}
-            >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <Label htmlFor="n8nWebhook" className="text-sm whitespace-nowrap">n8n Webhook:</Label>
+              <Input
+                id="n8nWebhook"
+                type="url"
+                placeholder="https://your-n8n-instance.com/webhook/..."
+                value={n8nWebhookUrl}
+                onChange={(e) => setN8nWebhookUrl(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <Button disabled={selected.length === 0} onClick={approveSelected}>
               Zatwierdź wybrane ({selected.length})
             </Button>
           </div>
@@ -514,20 +307,12 @@ const Dashboard = () => {
                     <div className="py-8">
                       <p className="mb-4">Brak faktur z emaili. Połącz Gmail i rozpocznij automatyczne przetwarzanie.</p>
                       <div className="flex items-center gap-2 mb-4">
-                        <Label htmlFor="emptyFromDate" className="text-sm">Od:</Label>
+                        <Label htmlFor="emptyFromDate" className="text-sm">Pobierz faktur od:</Label>
                         <Input
                           id="emptyFromDate"
                           type="date"
                           value={fromDate}
                           onChange={(e) => setFromDate(e.target.value)}
-                          className="w-auto text-sm"
-                        />
-                        <Label htmlFor="emptyToDate" className="text-sm">Do:</Label>
-                        <Input
-                          id="emptyToDate"
-                          type="date"
-                          value={toDate}
-                          onChange={(e) => setToDate(e.target.value)}
                           className="w-auto text-sm"
                         />
                       </div>
@@ -591,19 +376,21 @@ const Dashboard = () => {
             
             <iframe 
               title="PDF preview" 
-              src={selectedItem.fileUrl || ""} 
+              src={selectedItem.fileUrl || "/sample.pdf"} 
               className="flex-1 w-full border-0" 
               style={{ minHeight: '500px' }}
               onError={(e) => {
                 console.error('PDF preview error:', e);
+                // Fallback to sample PDF if the file URL doesn't work
+                if (selectedItem.fileUrl) {
+                  (e.target as HTMLIFrameElement).src = "/sample.pdf";
+                }
               }}
             />
           </div>
         )}
       </aside>
-      </section>
-      <OCRDebugPanel />
-    </div>
+    </section>
   );
 };
 

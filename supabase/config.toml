@@ -69,11 +69,5 @@ backend = "postgres"
 [functions.gmail-oauth]
 verify_jwt = false
 
-[functions.gmail-processor]
-verify_jwt = false
-
-[functions.fakturownia-api]
-verify_jwt = false
-
-[functions.imap-connect]
+[functions.n8n-webhook]
 verify_jwt = false

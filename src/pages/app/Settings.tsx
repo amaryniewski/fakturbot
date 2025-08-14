@@ -9,10 +9,6 @@ import { useGmailIntegration } from "@/hooks/useGmailIntegration";
 import { useImapIntegration } from "@/hooks/useImapIntegration";
 import { useFakturowniaIntegration } from "@/hooks/useFakturowniaIntegration";
 import { ImapConnectionForm } from "@/components/ImapConnectionForm";
-import { GmailFilterSettings } from "@/components/GmailFilterSettings";
-import { InvoiceProcessingControls } from "@/components/InvoiceProcessingControls";
-import { AutomationSettings } from "@/components/AutomationSettings";
-
 import { Mail, Trash2, FileText, Plus, RefreshCw, Server } from "lucide-react";
 
 const SettingsPage = () => {
@@ -208,34 +204,27 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
-      <AutomationSettings />
-
-      <InvoiceProcessingControls />
-
-      <GmailFilterSettings />
-
-
       <Card>
         <CardHeader>
           <CardTitle>Company</CardTitle>
-          <CardDescription>Dane firmy - funkcjonalność w przygotowaniu.</CardDescription>
+          <CardDescription>Dane firmy (placeholder).</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label>Company name</Label>
-            <Input disabled />
+            <Input placeholder="ACME Company" />
           </div>
           <div className="space-y-2">
             <Label>NIP</Label>
-            <Input disabled />
+            <Input placeholder="123-456-78-90" />
           </div>
           <div className="space-y-2">
             <Label>Default currency</Label>
-            <Input disabled />
+            <Input placeholder="PLN" />
           </div>
         </CardContent>
         <CardFooter>
-          <Button variant="secondary" disabled>Funkcja niedostępna</Button>
+          <Button variant="secondary" disabled>Zapisz (wkrótce)</Button>
         </CardFooter>
       </Card>
 
@@ -281,6 +270,7 @@ const SettingsPage = () => {
                         <Label htmlFor="companyName">Nazwa firmy</Label>
                         <Input
                           id="companyName"
+                          placeholder="ACME Company"
                           value={formData.companyName}
                           onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
                         />
@@ -289,6 +279,7 @@ const SettingsPage = () => {
                         <Label htmlFor="domain">Domena (bez .fakturownia.pl)</Label>
                         <Input
                           id="domain"
+                          placeholder="mojafirma"
                           value={formData.domain}
                           onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value }))}
                         />
@@ -298,6 +289,7 @@ const SettingsPage = () => {
                         <Input
                           id="apiToken"
                           type="password"
+                          placeholder="Wklej token API"
                           value={formData.apiToken}
                           onChange={(e) => setFormData(prev => ({ ...prev, apiToken: e.target.value }))}
                         />

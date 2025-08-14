@@ -11,10 +11,6 @@ import AuthCallback from "./pages/AuthCallback";
 
 import AppLayout from "./pages/app/AppLayout";
 import Dashboard from "./pages/app/Dashboard";
-import Processing from "./pages/app/Processing";
-import Failed from "./pages/app/Failed";
-import History from "./pages/app/History";
-import ParsedData from "./pages/app/ParsedData";
 import SettingsPage from "./pages/app/Settings";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AuthProvider } from "./context/UserContext";
@@ -44,10 +40,6 @@ const App = () => (
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="processing" element={<Processing />} />
-            <Route path="failed" element={<Failed />} />
-            <Route path="history" element={<History />} />
-            <Route path="parsed-data" element={<ParsedData />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

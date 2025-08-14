@@ -28,11 +28,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { fromDate, toDate } = await req.json().catch(() => ({}));
+    const { fromDate } = await req.json().catch(() => ({}));
+    console.log('Gmail processor started with fromDate:', fromDate);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // We'll check OCR settings per user, not globally
-    console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
     
     // Get all active Gmail connections - use service role to bypass RLS
     const { data: connections, error: connectionsError } = await supabase
@@ -45,16 +43,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => c.email));
     
-    let totalProcessedGlobal = 0;
-    let skippedDuplicatesGlobal = 0;
+    let totalProcessed = 0;
     
     for (const connection of connections || []) {
       console.log(`Processing connection: ${connection.email}`);
-      
-      // Reset counters for each user
-      let totalProcessed = 0;
-      let skippedDuplicates = 0;
-      let processedMessagesThisUser = 0;
       
       try {
         // Get decrypted tokens for this connection using the new function that includes user_id
@@ -66,80 +58,16 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        const { access_token, refresh_token, email, user_id, token_expires_at } = tokenData[0];
-        
-        // Check if token is expired and refresh if needed
-        let currentAccessToken = access_token;
-        if (token_expires_at && new Date(token_expires_at) <= new Date()) {
-          console.log(`Token expired for ${email}, refreshing...`);
-          
-          try {
-            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                client_id: Deno.env.get('GOOGLE_CLIENT_ID')!,
-                client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET')!,
-                refresh_token: refresh_token,
-                grant_type: 'refresh_token'
-              })
-            });
-
-            if (!refreshResponse.ok) {
-              console.error(`Failed to refresh token for ${email}:`, await refreshResponse.text());
-              continue;
-            }
-
-            const refreshData = await refreshResponse.json();
-            currentAccessToken = refreshData.access_token;
-            
-            // Update tokens in database
-            const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000));
-            await supabase.rpc('update_encrypted_gmail_tokens', {
-              p_connection_id: connection.id,
-              p_access_token: currentAccessToken,
-              p_refresh_token: refreshData.refresh_token || refresh_token,
-              p_token_expires_at: newExpiresAt.toISOString()
-            });
-            
-            console.log(`Token refreshed successfully for ${email}`);
-          } catch (refreshError) {
-            console.error(`Error refreshing token for ${email}:`, refreshError);
-            continue;
-          }
-        }
-        
-        
-        // Get user's automation settings - check OCR setting per user
-        const { data: userAutomationSettings } = await supabase
-          .from('user_automation_settings')
-          .select('auto_send_to_ocr')
-          .eq('user_id', user_id)
-          .single();
-          
-        const shouldAutoOCR = userAutomationSettings?.auto_send_to_ocr || false;
-        console.log(`User ${user_id} auto OCR setting:`, shouldAutoOCR);
-        
-        // Get user's filter settings
-        const { data: filterSettings } = await supabase
-          .from('gmail_filter_settings')
-          .select('filter_query, allowed_sender_emails')
-          .eq('user_id', user_id)
-          .single();
+        const { access_token, email, user_id } = tokenData[0];
         
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const searchToDate = toDate ? new Date(toDate) : new Date();
-        
-        // Use custom filter query if available, otherwise default
-        const baseQuery = filterSettings?.filter_query || 'has:attachment is:unread subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury';
-        const dateQuery = `after:${searchFromDate.toISOString().split('T')[0]} before:${searchToDate.toISOString().split('T')[0]}`;
-        const query = `${baseQuery} ${dateQuery}`;
+        const query = `in:inbox has:attachment after:${searchFromDate.toISOString().split('T')[0]} filename:pdf`;
         
         const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`;
         
         const searchResponse = await fetch(searchUrl, {
-          headers: { Authorization: `Bearer ${currentAccessToken}` }
+          headers: { Authorization: `Bearer ${access_token}` }
         });
 
         if (!searchResponse.ok) {
@@ -153,22 +81,8 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`Found ${messages.length} potential invoice emails for ${email}`);
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
-          let messageHasValidAttachments = false; // Track if this message has valid PDF attachments
           try {
-            // SECURITY CHECK: Verify this connection belongs to the current user_id
-            const { data: connectionVerification } = await supabase
-              .from('gmail_connections')
-              .select('user_id')
-              .eq('id', connection.id)
-              .eq('is_active', true)
-              .single();
-
-            if (!connectionVerification || connectionVerification.user_id !== user_id) {
-              console.error(`SECURITY BREACH DETECTED: Connection ${connection.id} user mismatch`);
-              continue;
-            }
-
-            // Check if we already processed this message FOR THIS SPECIFIC USER
+            // Check if we already processed this message
             const { data: existingInvoice } = await supabase
               .from('invoices')
               .select('id')
@@ -178,15 +92,13 @@ const handler = async (req: Request): Promise<Response> => {
 
             if (existingInvoice) {
               console.log(`Message ${message.id} already processed, skipping`);
-              skippedDuplicates++;
-              skippedDuplicatesGlobal++;
               continue;
             }
 
             // Get full message details
             const messageUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}`;
             const messageResponse = await fetch(messageUrl, {
-              headers: { Authorization: `Bearer ${currentAccessToken}` }
+              headers: { Authorization: `Bearer ${access_token}` }
             });
 
             if (!messageResponse.ok) continue;
@@ -199,17 +111,6 @@ const handler = async (req: Request): Promise<Response> => {
             const from = headers.find(h => h.name === 'From')?.value || '';
             const senderEmail = from.match(/<(.+)>/)?.[1] || from;
             const receivedDate = new Date(parseInt(messageData.internalDate));
-            
-            // Check if sender is allowed (if restriction is set)
-            if (filterSettings?.allowed_sender_emails && filterSettings.allowed_sender_emails.length > 0) {
-              const isAllowed = filterSettings.allowed_sender_emails.some(allowedEmail => 
-                senderEmail.toLowerCase().includes(allowedEmail.toLowerCase())
-              );
-              if (!isAllowed) {
-                console.log(`Skipping email from ${senderEmail} - not in allowed senders list`);
-                continue;
-              }
-            }
 
             // Find PDF attachments
             const parts = messageData.payload.parts || [];
@@ -219,7 +120,7 @@ const handler = async (req: Request): Promise<Response> => {
                 // Download attachment
                 const attachmentUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}/attachments/${part.body.attachmentId}`;
                 const attachmentResponse = await fetch(attachmentUrl, {
-                  headers: { Authorization: `Bearer ${currentAccessToken}` }
+                  headers: { Authorization: `Bearer ${access_token}` }
                 });
 
                 if (!attachmentResponse.ok) continue;
@@ -245,11 +146,11 @@ const handler = async (req: Request): Promise<Response> => {
                   .from('invoices')
                   .getPublicUrl(fileName);
 
-                // Create invoice record - CRITICAL: Ensure user_id is set correctly
-                const { data: invoiceRecord, error: invoiceError } = await supabase
+                // Create invoice record
+                const { error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: user_id, // SECURITY: Always use the verified user_id from token data
+                    user_id: user_id,
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -259,94 +160,38 @@ const handler = async (req: Request): Promise<Response> => {
                     file_url: publicUrl,
                     status: 'new',
                     needs_review: true
-                  })
-                  .select('id')
-                  .single();
+                  });
 
                 if (invoiceError) {
                   console.error('Failed to create invoice:', invoiceError);
-                  // Check if it's a duplicate error (new constraint)
-                  if (invoiceError.code === '23505' && invoiceError.message.includes('unique_user_message_attachment')) {
-                    console.log(`Duplicate invoice detected for message ${message.id}, skipping`);
-                    skippedDuplicates++;
-                    skippedDuplicatesGlobal++;
-                    continue;
-                  }
-                  // SECURITY LOG
-                  await supabase.rpc('log_token_access', {
-                    p_action: 'invoice_creation_failed',
-                    p_table_name: 'invoices', 
-                    p_record_id: null
-                  });
                   continue;
                 }
 
                 totalProcessed++;
-                totalProcessedGlobal++;
-                messageHasValidAttachments = true; // Mark this message as having valid attachments
-                console.log(`Processed invoice: ${part.filename} from ${senderEmail} (user: ${user_id})`);
+                console.log(`Processed invoice: ${part.filename} from ${senderEmail}`);
                 
-                // Auto-trigger OCR if enabled for THIS USER - send to n8n webhook
-                if (shouldAutoOCR) {
-                  try {
-                    console.log(`Sending to n8n webhook for user ${user_id}, invoice: ${part.filename}`);
-                    
-                    // Send directly to n8n webhook
-                    const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
-                    
-                    const webhookResponse = await fetch(n8nWebhookUrl, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        userId: user_id,
-                        invoiceId: invoiceRecord?.id,
-                        invoiceUrl: publicUrl,
-                        source: 'gmail-processor'
-                      })
-                    });
-
-                    if (!webhookResponse.ok) {
-                      throw new Error(`n8n webhook failed: ${webhookResponse.status}`);
-                    }
-
-                    console.log(`Successfully sent invoice to n8n webhook: ${part.filename}`);
-                  } catch (ocrError) {
-                    console.error(`Failed to send to n8n webhook for ${part.filename}:`, ocrError);
-                  }
-                } else {
-                  console.log(`OCR not started for ${part.filename} - user ${user_id} has auto OCR disabled`);
-                }
+                // Trigger OCR processing
+                await supabase.functions.invoke('ocr-processor', {
+                  body: { fileName, userId: user_id }
+                });
               }
             }
           } catch (messageError) {
             console.error(`Error processing message ${message.id}:`, messageError);
             continue;
-          } finally {
-            // Count processed messages (unique emails with valid attachments) for this user
-            if (messageHasValidAttachments) {
-              processedMessagesThisUser++;
-            }
           }
         }
-        
-        console.log(`User ${user_id} (${email}): processed ${processedMessagesThisUser} unique messages with ${totalProcessed} total attachments`);
       } catch (connectionError) {
         console.error(`Error processing connection ${connection.email}:`, connectionError);
         continue;
       }
     }
 
-    console.log(`Gmail processing completed: ${totalProcessedGlobal} new invoices, ${skippedDuplicatesGlobal} duplicates skipped`);
-    console.log(`FINAL RESULT - processedInvoices: ${totalProcessedGlobal}, skippedDuplicates: ${skippedDuplicatesGlobal}, processedConnections: ${connections?.length || 0}`);
-    
     return new Response(
       JSON.stringify({ 
         success: true, 
         processedConnections: connections?.length || 0,
-        processedInvoices: totalProcessedGlobal,
-        skippedDuplicates: skippedDuplicatesGlobal
+        processedInvoices: totalProcessed 
       }),
       { headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
