@@ -41,7 +41,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to fetch connections: ${connectionsError.message}`);
     }
 
-    console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => c.email));
+    console.log(`Processing ${connections?.length || 0} Gmail connections:`, connections?.map(c => `${c.email} (user: ${c.user_id})`));
     
     let totalProcessed = 0;
     
@@ -60,12 +60,14 @@ const handler = async (req: Request): Promise<Response> => {
 
         const { access_token, email, user_id } = tokenData[0];
         
-        // Get user's filter settings
+        // Get user's filter settings - use service role with proper user validation
         const { data: filterSettings } = await supabase
           .from('gmail_filter_settings')
           .select('filter_query, allowed_sender_emails')
           .eq('user_id', user_id)
           .single();
+        
+        console.log(`Processing Gmail connection for user ${user_id}, email: ${email}`);
         
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -94,13 +96,15 @@ const handler = async (req: Request): Promise<Response> => {
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
           try {
-            // Check if we already processed this message
+            // Check if we already processed this message for THIS user
             const { data: existingInvoice } = await supabase
               .from('invoices')
-              .select('id')
+              .select('id, user_id')
               .eq('gmail_message_id', message.id)
               .eq('user_id', user_id)
               .single();
+            
+            console.log(`Checking for existing invoice for message ${message.id} and user ${user_id}:`, existingInvoice);
 
             if (existingInvoice) {
               console.log(`Message ${message.id} already processed, skipping`);
@@ -169,11 +173,12 @@ const handler = async (req: Request): Promise<Response> => {
                   .from('invoices')
                   .getPublicUrl(fileName);
 
-                // Create invoice record
+                // Create invoice record with explicit user_id validation
+                console.log(`Creating invoice for user ${user_id}, email: ${email}, message: ${message.id}`);
                 const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
-                    user_id: user_id,
+                    user_id: user_id, // CRITICAL: This must match the Gmail connection owner
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -194,7 +199,15 @@ const handler = async (req: Request): Promise<Response> => {
 
                 if (invoiceData) {
                   totalProcessed++;
-                  console.log(`Processed invoice: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
+                  console.log(`✅ CREATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, User in record: ${invoiceData.user_id}`);
+                  
+                  // Verify the invoice was created for the correct user
+                  if (invoiceData.user_id !== user_id) {
+                    console.error(`❌ CRITICAL ERROR: Invoice created for wrong user! Expected: ${user_id}, Got: ${invoiceData.user_id}`);
+                    // Delete the incorrectly assigned invoice
+                    await supabase.from('invoices').delete().eq('id', invoiceData.id);
+                    continue;
+                  }
                   
                   // Trigger OCR processing with proper parameters
                   try {
