@@ -17,9 +17,21 @@ interface GmailMessage {
       filename: string;
       mimeType: string;
       body: { attachmentId?: string; data?: string };
+      parts?: Array<any>;
     }>;
   };
   internalDate: string;
+}
+
+// Recursive function to walk through all message parts
+function* walkParts(p: any): Generator<any> {
+  if (!p) return;
+  if (Array.isArray(p)) {
+    for (const x of p) yield* walkParts(x);
+  } else {
+    if (p.filename && p.body?.attachmentId) yield p;
+    if (p.parts) yield* walkParts(p.parts);
+  }
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -88,6 +100,12 @@ const handler = async (req: Request): Promise<Response> => {
 
         let { access_token, refresh_token, email: tokenEmail, token_expires_at, user_id: tokenUserId } = tokenData[0];
         
+        // Verify that token email matches connection email
+        if (tokenEmail && tokenEmail.toLowerCase() !== userEmail.toLowerCase()) {
+          console.error(`Token email ${tokenEmail} ≠ connection email ${userEmail}`);
+          continue;
+        }
+        
         // Check if token is expired and refresh if needed
         const tokenExpiry = new Date(token_expires_at);
         const isExpired = tokenExpiry <= new Date();
@@ -146,44 +164,63 @@ const handler = async (req: Request): Promise<Response> => {
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const searchToDate = toDate ? new Date(toDate) : new Date();
         
-        // Use custom filter query if available, otherwise default
-        const baseQuery = filterSettings?.filter_query || 'has:attachment subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury';
-        const dateQuery = `after:${searchFromDate.toISOString().split('T')[0]} before:${searchToDate.toISOString().split('T')[0]}`;
+        // Use custom filter query if available, otherwise default with is:unread
+        const baseQuery = filterSettings?.filter_query || 'has:attachment is:unread (subject:invoice OR subject:faktura OR subject:fakturę OR subject:faktury)';
+        
+        // Format dates for Gmail (YYYY/MM/DD)
+        const formatDate = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '/');
+        const dateQuery = `after:${formatDate(searchFromDate)} before:${formatDate(searchToDate)}`;
         const query = `${baseQuery} ${dateQuery}`;
         
         console.log(`🔍 Gmail search query: ${query}`);
-        const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`;
-        console.log(`📧 Searching Gmail for ${userEmail} with URL: ${searchUrl}`);
         
-        const searchResponse = await fetch(searchUrl, {
-          headers: { Authorization: `Bearer ${access_token}` }
-        });
-
-        if (!searchResponse.ok) {
-          const errorText = await searchResponse.text();
-          console.error(`Gmail API search failed for ${userEmail}:`, errorText);
-          console.error(`Status: ${searchResponse.status}, Query: ${query}`);
-          continue;
-        }
-
-        const searchResult = await searchResponse.json();
-        const messages = searchResult.messages || [];
+        // Process all pages, not just first 10 messages
+        let allMessages: any[] = [];
+        let pageToken: string | undefined;
         
-        console.log(`Found ${messages.length} potential invoice emails for ${userEmail}`);
+        do {
+          const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+          url.searchParams.set('q', query);
+          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          
+          console.log(`📧 Searching Gmail for ${userEmail} with URL: ${url}`);
+          
+          const searchResponse = await fetch(url, {
+            headers: { Authorization: `Bearer ${access_token}` }
+          });
 
-        for (const message of messages.slice(0, 10)) { // Process max 10 per run
+          if (!searchResponse.ok) {
+            const errorText = await searchResponse.text();
+            console.error(`Gmail API search failed for ${userEmail}:`, errorText);
+            console.error(`Status: ${searchResponse.status}, Query: ${query}`);
+            break;
+          }
+
+          const searchResult = await searchResponse.json();
+          const messages = searchResult.messages || [];
+          allMessages.push(...messages);
+          pageToken = searchResult.nextPageToken;
+          
+          console.log(`Found ${messages.length} messages in this page, total so far: ${allMessages.length}`);
+        } while (pageToken);
+        
+        console.log(`Found ${allMessages.length} total potential invoice emails for ${userEmail}`);
+
+        for (const message of allMessages) {
           try {
-            // CRITICAL: Check if message was processed for ANY user BEFORE processing (prevent cross-user duplicates)
+            // CRITICAL: Use per-user deduplication - only check if THIS user already processed this message
+            const ownerId = connection.user_id; // source of truth
             const { data: existingInvoice } = await supabase
               .from('invoices')
-              .select('id, user_id')
+              .select('id')
+              .eq('user_id', ownerId)
               .eq('gmail_message_id', message.id)
               .maybeSingle();
             
-            console.log(`Checking for existing invoice for message ${message.id} and user ${currentUserId}:`, existingInvoice);
+            console.log(`Checking for existing invoice for message ${message.id} and user ${ownerId}:`, existingInvoice);
 
             if (existingInvoice) {
-              console.log(`Message ${message.id} already processed for user ${currentUserId}, skipping`);
+              console.log(`Message ${message.id} already processed for user ${ownerId}, skipping`);
               continue;
             }
 
@@ -215,9 +252,8 @@ const handler = async (req: Request): Promise<Response> => {
               }
             }
 
-            // Find PDF attachments
-            const parts = messageData.payload.parts || [];
-            for (const part of parts) {
+            // Find PDF attachments using recursive search through all parts
+            for (const part of walkParts(messageData.payload?.parts || [])) {
               if (part.filename && part.filename.toLowerCase().includes('.pdf') && part.body.attachmentId) {
                 
                 // Download attachment
@@ -231,7 +267,9 @@ const handler = async (req: Request): Promise<Response> => {
                 const attachmentData = await attachmentResponse.json();
                 const fileBuffer = Uint8Array.from(atob(attachmentData.data.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
-                const fileName = `${currentUserId}/${Date.now()}-${part.filename}`;
+                // CRITICAL: Use connection owner's user_id for storage path
+                const ownerId = connection.user_id;
+                const fileName = `${ownerId}/${Date.now()}-${part.filename}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
                   .from('invoices')
                   .upload(fileName, fileBuffer, {
@@ -249,13 +287,13 @@ const handler = async (req: Request): Promise<Response> => {
                   .getPublicUrl(fileName);
 
                 // Log invoice creation attempt
-                console.log(`✅ Creating invoice for user ${currentUserId}, email: ${userEmail}, message: ${message.id}`);
+                console.log(`✅ Creating invoice for connection owner ${ownerId}, email: ${userEmail}, message: ${message.id}`);
 
-                // Create invoice for authenticated user
+                // CRITICAL: Create invoice with connection owner's user_id, not currentUserId
                 const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
-                  .insert({
-                    user_id: currentUserId, // Use authenticated user ID
+                  .upsert({
+                    user_id: ownerId, // Use connection owner's ID - source of truth
                     gmail_message_id: message.id,
                     sender_email: senderEmail,
                     subject: subject,
@@ -265,16 +303,19 @@ const handler = async (req: Request): Promise<Response> => {
                     file_url: publicUrl,
                     status: 'new',
                     needs_review: true
+                  }, { 
+                    onConflict: 'user_id,gmail_message_id',
+                    ignoreDuplicates: true 
                   })
                   .select()
                   .single();
 
                 if (invoiceError) {
-                  console.error(`❌ FAILED to create invoice for user ${currentUserId}:`, invoiceError);
+                  console.error(`❌ FAILED to create invoice for user ${ownerId}:`, invoiceError);
                   continue;
                 }
 
-                console.log(`✅ Invoice created for USER ${currentUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
+                console.log(`✅ Invoice created for USER ${ownerId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
 
                 totalProcessed++;
               }
