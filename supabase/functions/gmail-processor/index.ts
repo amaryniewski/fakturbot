@@ -276,18 +276,6 @@ const handler = async (req: Request): Promise<Response> => {
 
                 console.log(`✅ Invoice created for USER ${currentUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
 
-                // Trigger OCR processing
-                try {
-                  await supabase.functions.invoke('ocr-processor', {
-                    body: { 
-                      invoiceId: invoiceData.id, 
-                      userId: currentUserId
-                    }
-                  });
-                } catch (ocrError) {
-                  console.error('Failed to trigger OCR:', ocrError);
-                }
-
                 totalProcessed++;
               }
             }
