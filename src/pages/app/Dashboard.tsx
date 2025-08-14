@@ -235,26 +235,50 @@ const Dashboard = () => {
             throw new Error(`Invoice ${invoice.file_name} has no file URL`);
           }
 
-          console.log(`📦 Sending file URL to n8n: ${invoice.file_name}`);
+          // Fetch the actual PDF file from Supabase Storage with timeout
+          console.log(`🔄 Fetching PDF file from: ${invoice.file_url}`);
           
-          // Send just the URL and metadata to n8n - let n8n fetch the file
-          const payload = {
-            userId: user.id,
-            invoiceId: invoice.id,
-            invoiceUrl: invoice.file_url,
-            fileName: invoice.file_name,
-            source: 'fakturbot-dashboard',
-            timestamp: new Date().toISOString()
-          };
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+          
+          const fileResponse = await fetch(invoice.file_url, {
+            signal: controller.signal,
+            method: 'GET',
+            headers: {
+              'Accept': 'application/pdf,*/*'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!fileResponse.ok) {
+            throw new Error(`Failed to fetch file: ${fileResponse.status} ${fileResponse.statusText}`);
+          }
+
+          const fileBlob = await fileResponse.blob();
+          console.log(`✅ File fetched: ${fileBlob.size} bytes, type: ${fileBlob.type}`);
+
+          // Create FormData with binary file data
+          const formData = new FormData();
+          formData.append('data', fileBlob, invoice.file_name); // n8n expects 'data' field
+          formData.append('userId', user.id);
+          formData.append('invoiceId', invoice.id);
+          formData.append('fileName', invoice.file_name);
+          formData.append('source', 'fakturbot-dashboard');
+          formData.append('timestamp', new Date().toISOString());
+
+          console.log(`📦 Sending FormData with file: ${invoice.file_name} (${fileBlob.size} bytes)`);
+          
+          const webhookController = new AbortController();
+          const webhookTimeoutId = setTimeout(() => webhookController.abort(), 60000); // 60s timeout for webhook
           
           const webhookResponse = await fetch(n8nWebhookUrl, {
             method: 'POST',
-            mode: 'cors',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
+            signal: webhookController.signal,
+            body: formData // Send FormData with 'data' field as n8n expects
           });
+          
+          clearTimeout(webhookTimeoutId);
           
           console.log(`📡 Webhook response for ${invoice.file_name}: Status ${webhookResponse.status}, OK: ${webhookResponse.ok}`);
           
