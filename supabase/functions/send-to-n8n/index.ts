@@ -24,16 +24,13 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("No invoice IDs provided");
     }
 
-    // Get webhook URL - try environment variable first, then use fallback
-    let webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+    // Get webhook URL from Supabase secrets
+    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+    console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
     
     if (!webhookUrl) {
-      console.log("N8N_WEBHOOK_URL not found in environment, using fallback");
-      // TODO: Replace this with your actual N8N webhook URL
-      webhookUrl = "https://your-n8n-instance.com/webhook/invoice-approval";
+      throw new Error("N8N webhook URL not configured in Supabase secrets");
     }
-    
-    console.log("Using webhook URL:", webhookUrl);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
