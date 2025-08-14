@@ -633,6 +633,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      audit_and_clean_cross_user_invoices: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          cleaned_invoices: string[]
+          security_report: Json
+          violation_count: number
+        }[]
+      }
       audit_user_data_access: {
         Args: {
           p_details?: Json
