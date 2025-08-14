@@ -27,8 +27,20 @@ const handler = async (req: Request): Promise<Response> => {
     // Get webhook URL from Supabase secrets
     const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
     console.log("N8N_WEBHOOK_URL exists:", !!webhookUrl);
+    console.log("N8N_WEBHOOK_URL value (first 50 chars):", webhookUrl ? webhookUrl.substring(0, 50) + "..." : "null");
+    console.log("All env variables available:", Object.keys(Deno.env.toObject()));
+    
     if (!webhookUrl) {
       throw new Error("N8N webhook URL not configured in Supabase secrets");
+    }
+    
+    // Validate URL format
+    try {
+      new URL(webhookUrl);
+      console.log("Webhook URL is valid");
+    } catch (e) {
+      console.error("Invalid webhook URL format:", e);
+      throw new Error(`Invalid webhook URL format: ${e.message}`);
     }
 
     const supabase = createClient(
