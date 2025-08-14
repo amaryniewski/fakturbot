@@ -80,10 +80,23 @@ const handler = async (req: Request): Promise<Response> => {
         try {
           console.log(`Downloading PDF for invoice ${invoice.id}: ${invoice.file_url}`);
           
+          // Extract file path from URL
+          let filePath;
+          if (invoice.file_url.includes('/storage/v1/object/public/invoices/')) {
+            filePath = invoice.file_url.split('/storage/v1/object/public/invoices/')[1];
+          } else if (invoice.file_url.includes('/invoices/')) {
+            filePath = invoice.file_url.split('/invoices/')[1];
+          } else {
+            console.error(`Invalid file URL format: ${invoice.file_url}`);
+            continue;
+          }
+          
+          console.log(`Extracted file path: ${filePath}`);
+          
           // Get file from Supabase Storage
           const { data: fileData, error: downloadError } = await supabase.storage
             .from('invoices')
-            .download(invoice.file_url.split('/invoices/')[1]); // Extract path after bucket name
+            .download(filePath);
           
           if (downloadError) {
             console.error(`Failed to download file for invoice ${invoice.id}:`, downloadError);
