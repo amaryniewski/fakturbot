@@ -46,11 +46,11 @@ const handler = async (req: Request): Promise<Response> => {
     let totalProcessed = 0;
     
     for (const connection of connections || []) {
-      const { id: connectionId, email: userEmail, user_id } = connection;
-      console.log(`🔄 Processing connection: ${userEmail} for user: ${user_id}`);
+      const { id: connectionId, email: userEmail, user_id: connectionUserId } = connection;
+      console.log(`🔄 Processing connection: ${userEmail} for user: ${connectionUserId}`);
       
       // Critical security validation
-      if (!user_id) {
+      if (!connectionUserId) {
         console.error(`❌ CRITICAL: No user_id found for connection ${connectionId}, skipping`);
         continue;
       }
@@ -60,13 +60,13 @@ const handler = async (req: Request): Promise<Response> => {
         const { data: isValidOwner } = await supabase
           .rpc('validate_connection_ownership_enhanced', { 
             p_connection_id: connectionId, 
-            p_user_id: user_id 
+            p_user_id: connectionUserId 
           });
         
         if (!isValidOwner) {
-          console.error(`❌ CRITICAL SECURITY: Connection ${connectionId} ownership validation failed for user ${user_id}`);
+          console.error(`❌ CRITICAL SECURITY: Connection ${connectionId} ownership validation failed for user ${connectionUserId}`);
           await supabase.rpc('audit_user_data_access', {
-            p_user_id: user_id,
+            p_user_id: connectionUserId,
             p_operation: 'connection_SECURITY_VIOLATION',
             p_table_name: 'gmail_connections',
             p_details: { connection_id: connectionId, attempted_by: 'gmail-processor' }
@@ -134,10 +134,10 @@ const handler = async (req: Request): Promise<Response> => {
         const { data: filterSettings } = await supabase
           .from('gmail_filter_settings')
           .select('filter_query, allowed_sender_emails')
-          .eq('user_id', user_id)
+          .eq('user_id', connectionUserId)
           .single();
         
-        console.log(`Processing Gmail connection for user ${user_id}, email: ${userEmail}`);
+        console.log(`Processing Gmail connection for user ${connectionUserId}, email: ${userEmail}`);
         
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -177,7 +177,7 @@ const handler = async (req: Request): Promise<Response> => {
               .eq('gmail_message_id', message.id)
               .maybeSingle();
             
-            console.log(`Checking for existing invoice for message ${message.id} and user ${user_id}:`, existingInvoice);
+            console.log(`Checking for existing invoice for message ${message.id} and user ${connectionUserId}:`, existingInvoice);
 
             if (existingInvoice) {
               // CRITICAL SECURITY CHECK: If invoice exists but for different user - this is expected for shared/forwarded emails
@@ -312,14 +312,14 @@ const handler = async (req: Request): Promise<Response> => {
                   continue;
                 }
 
-                console.log(`✅ SECURITY VALIDATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
+                console.log(`✅ SECURITY VALIDATED INVOICE for USER ${tokenUserId}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
 
                 // Trigger OCR processing with proper user_id validation
                 try {
                   await supabase.functions.invoke('ocr-processor', {
                     body: { 
                       invoiceId: invoiceData.id, 
-                      userId: user_id // Use user_id for consistency
+                      userId: tokenUserId // Use tokenUserId for consistency - this is the actual owner
                     }
                   });
                 } catch (ocrError) {
