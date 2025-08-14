@@ -161,20 +161,25 @@ const handler = async (req: Request): Promise<Response> => {
         const userInfo = await userInfoResponse.json();
         console.log('User info received:', { email: userInfo.email });
 
-        // Store the connection in database 
-        // Since we have complete access through service role, we can insert directly
-        // but still use the encrypted token functions for security
+        // Store the connection in database using UPSERT pattern
+        // This handles both new connections and reactivating previously disconnected ones
         const expiresAt = tokens.expires_in ? 
           new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null;
         
+        // Use upsert to handle reconnection scenarios
         const { data: connectionData, error: dbError } = await supabase
           .from('gmail_connections')
-          .insert({
+          .upsert({
             user_id: state, // state contains user ID
             email: userInfo.email,
             access_token: tokens.access_token, // Will be encrypted by trigger
             refresh_token: tokens.refresh_token || '',
-            token_expires_at: expiresAt
+            token_expires_at: expiresAt,
+            is_active: true, // Ensure connection is active
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,email',
+            ignoreDuplicates: false
           })
           .select('id')
           .single();
@@ -184,7 +189,18 @@ const handler = async (req: Request): Promise<Response> => {
           throw new Error(`Database error: ${dbError.message}`);
         }
 
-        console.log('Gmail connection stored with ID:', connectionData);
+        // Check if this was a new connection or reactivation
+        const { data: existingConnection } = await supabase
+          .from('gmail_connections')
+          .select('created_at, updated_at')
+          .eq('id', connectionData.id)
+          .single();
+        
+        const isReactivation = existingConnection && 
+          existingConnection.created_at !== existingConnection.updated_at;
+        
+        console.log(`Gmail connection ${isReactivation ? 'reactivated' : 'created'} with ID:`, 
+          connectionData.id, `for email: ${userInfo.email}`);
 
         const successHtml = `<!DOCTYPE html>
 <html lang="pl">
