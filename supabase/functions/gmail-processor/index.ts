@@ -83,7 +83,7 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        const { access_token, email } = tokenData[0];
+        const { access_token, email: tokenEmail } = tokenData[0];
         
         // Get user's filter settings - use service role with proper user validation
         const { data: filterSettings } = await supabase
@@ -92,7 +92,7 @@ const handler = async (req: Request): Promise<Response> => {
           .eq('user_id', user_id)
           .single();
         
-        console.log(`Processing Gmail connection for user ${user_id}, email: ${email}`);
+        console.log(`Processing Gmail connection for user ${user_id}, email: ${userEmail}`);
         
         // Use fromDate if provided, otherwise default to last 7 days
         const searchFromDate = fromDate ? new Date(fromDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -110,14 +110,14 @@ const handler = async (req: Request): Promise<Response> => {
         });
 
         if (!searchResponse.ok) {
-          console.error(`Gmail API search failed for ${email}:`, await searchResponse.text());
+          console.error(`Gmail API search failed for ${userEmail}:`, await searchResponse.text());
           continue;
         }
 
         const searchResult = await searchResponse.json();
         const messages = searchResult.messages || [];
         
-        console.log(`Found ${messages.length} potential invoice emails for ${email}`);
+        console.log(`Found ${messages.length} potential invoice emails for ${userEmail}`);
 
         for (const message of messages.slice(0, 10)) { // Process max 10 per run
           try {
