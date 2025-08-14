@@ -81,36 +81,19 @@ const handler = async (req: Request): Promise<Response> => {
         const fileBuffer = await fileResponse.arrayBuffer();
         console.log(`Downloaded file size: ${fileBuffer.byteLength} bytes`);
 
-        // Create FormData with PDF file and metadata
-        const formData = new FormData();
+        console.log(`Sending ${invoice.file_name} as binary data to webhook...`);
         
-        // Add the PDF file
-        const blob = new Blob([fileBuffer], { type: 'application/pdf' });
-        formData.append('file', blob, invoice.file_name);
-        
-        // Add metadata as JSON
-        const metadata = {
-          invoice_id: invoice.id,
-          file_name: invoice.file_name,
-          sender_email: invoice.sender_email,
-          subject: invoice.subject,
-          received_at: invoice.received_at,
-          approved_at: invoice.approved_at,
-          approved_by: invoice.approved_by,
-          file_size: invoice.file_size
-        };
-        
-        formData.append('metadata', JSON.stringify(metadata));
-        
-        console.log(`Sending ${invoice.file_name} to webhook...`);
-        
-        // Send to N8N webhook
+        // Send raw PDF binary data to N8N webhook
         const webhookResponse = await fetch(webhookUrl, {
           method: "POST",
           headers: {
+            "Content-Type": "application/pdf",
             "User-Agent": "FakturBot/1.0",
+            "X-Invoice-ID": invoice.id,
+            "X-File-Name": invoice.file_name,
+            "X-Sender-Email": invoice.sender_email,
           },
-          body: formData
+          body: fileBuffer
         });
 
         console.log(`Webhook response for ${invoice.file_name}: ${webhookResponse.status}`);
