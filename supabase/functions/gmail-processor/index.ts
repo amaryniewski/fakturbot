@@ -32,9 +32,9 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Gmail processor started with fromDate:', fromDate, 'toDate:', toDate);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Get all active Gmail connections - use service role to bypass RLS
+    // Get all active Gmail connections - use service role with proper validation
     const { data: connections, error: connectionsError } = await supabase
-      .rpc('get_all_active_gmail_connections');
+      .rpc('get_all_active_gmail_connections_for_processing');
 
     if (connectionsError) {
       console.error('Failed to fetch connections:', connectionsError);
@@ -46,19 +46,38 @@ const handler = async (req: Request): Promise<Response> => {
     let totalProcessed = 0;
     
     for (const connection of connections || []) {
-      console.log(`Processing connection: ${connection.email}`);
+      const { id: connectionId, email: userEmail, user_id } = connection;
+      console.log(`🔄 Processing connection: ${userEmail} for user: ${user_id}`);
+      
+      // Critical security validation
+      if (!user_id) {
+        console.error(`❌ CRITICAL: No user_id found for connection ${connectionId}, skipping`);
+        continue;
+      }
       
       try {
+        // Double validate connection ownership using our security function
+        const { data: isValidOwner } = await supabase
+          .rpc('validate_connection_ownership', { 
+            p_connection_id: connectionId, 
+            p_user_id: user_id 
+          });
+        
+        if (!isValidOwner) {
+          console.error(`❌ CRITICAL: Connection ${connectionId} ownership validation failed for user ${user_id}, skipping`);
+          continue;
+        }
+        
         // Get decrypted tokens for this connection using the new function that includes user_id
         const { data: tokenData, error: tokenError } = await supabase
-          .rpc('get_decrypted_gmail_tokens_with_user', { p_connection_id: connection.id });
+          .rpc('get_decrypted_gmail_tokens_with_user', { p_connection_id: connectionId });
 
         if (tokenError || !tokenData?.[0]) {
-          console.error(`Failed to get tokens for ${connection.email}:`, tokenError);
+          console.error(`Failed to get tokens for ${userEmail}:`, tokenError);
           continue;
         }
 
-        const { access_token, email, user_id } = tokenData[0];
+        const { access_token, email } = tokenData[0];
         
         // Get user's filter settings - use service role with proper user validation
         const { data: filterSettings } = await supabase
@@ -199,7 +218,21 @@ const handler = async (req: Request): Promise<Response> => {
 
                 if (invoiceData) {
                   totalProcessed++;
-                  console.log(`✅ CREATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, User in record: ${invoiceData.user_id}`);
+                  
+                  // Critical validation: ensure invoice was created for correct user
+                  if (invoiceData.user_id !== user_id) {
+                    console.error(`❌ CRITICAL SECURITY ERROR: Invoice created for wrong user! Expected: ${user_id}, Got: ${invoiceData.user_id} - This should never happen with proper RLS!`);
+                    // Log security incident
+                    await supabase.rpc('log_data_access_attempt', {
+                      p_user_id: user_id,
+                      p_action: 'SECURITY_VIOLATION_WRONG_USER_ID',
+                      p_resource_id: invoiceData.id,
+                      p_resource_type: 'invoice'
+                    });
+                    continue;
+                  }
+                  
+                  console.log(`✅ CREATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, Verified User: ${invoiceData.user_id}`);
                   
                   // Trigger OCR processing with proper parameters
                   try {

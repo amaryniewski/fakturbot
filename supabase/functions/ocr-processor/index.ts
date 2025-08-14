@@ -106,36 +106,47 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Invoice ID is required');
     }
 
-    // SECURITY: Validate user access to invoice
-    if (userId) {
-      const { data: invoiceCheck } = await supabase
-        .from('invoices')
-        .select('user_id')
-        .eq('id', invoiceId)
-        .eq('user_id', userId)
-        .single();
-      
-      if (!invoiceCheck) {
-        throw new Error('Access denied: Invoice not found or not authorized');
-      }
-    }
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get the invoice record with user validation
+    // CRITICAL SECURITY: Always validate user access to invoice first
+    if (!userId) {
+      throw new Error('User ID is required for security validation');
+    }
+    
+    // Validate invoice ownership using our security function
+    const { data: hasAccess } = await supabase
+      .rpc('validate_invoice_ownership', { 
+        p_invoice_id: invoiceId, 
+        p_user_id: userId 
+      });
+    
+    if (!hasAccess) {
+      console.error(`❌ SECURITY: User ${userId} attempted to access invoice ${invoiceId} without permission`);
+      throw new Error('Access denied: Invoice not found or not authorized');
+    }
+
+    // Get the invoice record with explicit user validation
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .select('*')
       .eq('id', invoiceId)
-      .eq('user_id', userId || null)
       .single();
 
     if (invoiceError || !invoice) {
+      console.error('❌ Invoice not found or access denied:', invoiceError);
       throw new Error('Invoice not found or access denied');
     }
+    
+    // Additional security validation - ensure user_id matches
+    if (invoice.user_id !== userId) {
+      console.error(`❌ CRITICAL SECURITY ERROR: Invoice ${invoiceId} user_id mismatch! Invoice user: ${invoice.user_id}, Requesting user: ${userId}`);
+      throw new Error('Access denied: Invoice user_id validation failed');
+    }
+    
+    console.log(`🔍 Processing OCR for invoice ${invoiceId} owned by user ${invoice.user_id}`);
 
     // Update status to processing
     await supabase

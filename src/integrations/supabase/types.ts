@@ -673,7 +673,7 @@ export type Database = {
         Args: { token_value: string }
         Returns: string
       }
-      get_all_active_gmail_connections: {
+      get_all_active_gmail_connections_for_processing: {
         Args: Record<PropertyKey, never>
         Returns: {
           created_at: string
@@ -862,6 +862,15 @@ export type Database = {
         Args: { p_action: string; p_table_name: string; p_user_id: string }
         Returns: undefined
       }
+      log_data_access_attempt: {
+        Args: {
+          p_action: string
+          p_resource_id: string
+          p_resource_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       log_token_access: {
         Args: { p_action: string; p_record_id: string; p_table_name: string }
         Returns: undefined
@@ -899,6 +908,14 @@ export type Database = {
           table_name: string
           unencrypted_tokens: number
         }[]
+      }
+      validate_connection_ownership: {
+        Args: { p_connection_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      validate_invoice_ownership: {
+        Args: { p_invoice_id: string; p_user_id: string }
+        Returns: boolean
       }
       validate_token_encryption: {
         Args: Record<PropertyKey, never>
