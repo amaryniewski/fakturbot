@@ -641,6 +641,19 @@ export type Database = {
           violation_count: number
         }[]
       }
+      audit_and_fix_cross_user_invoices: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          action_type: string
+          correct_user_id: string
+          file_path_new: string
+          file_path_old: string
+          gmail_message_id: string
+          invoice_id: string
+          status: string
+          wrong_user_id: string
+        }[]
+      }
       audit_user_data_access: {
         Args: {
           p_details?: Json
