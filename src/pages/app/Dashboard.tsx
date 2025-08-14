@@ -160,23 +160,36 @@ const Dashboard = () => {
 
         if (webhookError) {
           console.error('Webhook error details:', webhookError);
-          console.error('Webhook error type:', typeof webhookError);
-          console.error('Webhook error keys:', Object.keys(webhookError));
           toast({
             title: "Ostrzeżenie",
-            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${JSON.stringify(webhookError)}`,
+            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message || 'Nieznany błąd'}`,
             variant: "destructive",
           });
+        } else if (data?.success) {
+          const successCount = data.results?.filter((r: any) => r.success).length || 0;
+          const errorCount = data.results?.filter((r: any) => !r.success).length || 0;
+          
+          if (errorCount > 0) {
+            toast({
+              title: "Częściowy sukces",
+              description: `Zatwierdzono ${selected.length} faktur. Wysłano ${successCount}, błędów: ${errorCount}`,
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Sukces",
+              description: `Zatwierdzono i wysłano ${selected.length} faktur do n8n`,
+            });
+          }
         } else {
           toast({
-            title: "Sukces",
-            description: `Zatwierdzono ${selected.length} faktur i wysłano do n8n`,
+            title: "Błąd",
+            description: data?.error || "Nieznany błąd podczas wysyłania do n8n",
+            variant: "destructive",
           });
         }
       } catch (webhookError: any) {
         console.error('Webhook error caught:', webhookError);
-        console.error('Webhook error message:', webhookError.message);
-        console.error('Webhook error stack:', webhookError.stack);
         toast({
           title: "Ostrzeżenie", 
           description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message || String(webhookError)}`,
