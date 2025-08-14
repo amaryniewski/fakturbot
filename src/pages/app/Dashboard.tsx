@@ -207,46 +207,64 @@ const Dashboard = () => {
 
         if (fetchError) throw fetchError;
 
-        // Start OCR processing for each invoice using n8n workflow
-        const ocrPromises = approvedInvoices?.map(async (invoice) => {
+        // Send invoices to n8n webhook directly - simplified approach
+        const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
+        
+        const webhookPromises = approvedInvoices?.map(async (invoice) => {
           try {
             // Only start OCR if not already processed
             if (invoice.status === 'new' || invoice.status === 'failed') {
-              console.log(`Starting n8n OCR for invoice ${invoice.id}: ${invoice.file_url}`);
+              console.log(`Sending to n8n webhook: ${invoice.id} - ${invoice.file_url}`);
               
-              // Use n8n OCR processor instead of old functions
-              const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('n8n-ocr-processor', {
-                body: { 
+              // Update status to processing
+              await supabase
+                .from('invoices')
+                .update({ status: 'processing' })
+                .eq('id', invoice.id);
+              
+              // Send directly to n8n webhook
+              const webhookResponse = await fetch(n8nWebhookUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: (await supabase.auth.getUser()).data.user?.id,
                   invoiceId: invoice.id,
                   invoiceUrl: invoice.file_url,
-                  userId: (await supabase.auth.getUser()).data.user?.id
-                }
+                  source: 'fakturbot-dashboard'
+                })
               });
               
-              if (ocrError) {
-                console.error(`n8n OCR failed for invoice ${invoice.id}:`, ocrError);
-              } else {
-                console.log(`n8n OCR completed for invoice ${invoice.id}:`, ocrResult);
+              if (!webhookResponse.ok) {
+                throw new Error(`Webhook failed: ${webhookResponse.status}`);
               }
+              
+              console.log(`Successfully sent invoice ${invoice.id} to n8n webhook`);
             }
-          } catch (ocrError) {
-            console.error(`OCR processing failed for invoice ${invoice.id}:`, ocrError);
+          } catch (error) {
+            console.error(`Failed to send invoice ${invoice.id} to webhook:`, error);
+            // Update status back to failed
+            await supabase
+              .from('invoices')
+              .update({ status: 'failed' })
+              .eq('id', invoice.id);
           }
         }) || [];
 
-        // Wait for all OCR processing to start
-        await Promise.allSettled(ocrPromises);
+        // Wait for all webhook calls to complete
+        await Promise.allSettled(webhookPromises);
 
         toast({
           title: "Zatwierdzono!",
-          description: `${selected.length} faktur zostało zatwierdzonych i rozpoczęto przetwarzanie OCR.`,
+          description: `${selected.length} faktur zostało wysłanych do n8n.`,
         });
 
       } catch (ocrError: any) {
         console.error('OCR processing error:', ocrError);
         toast({
           title: "Ostrzeżenie", 
-          description: `Faktury zatwierdzono, ale wystąpił problem z uruchomieniem OCR.`,
+          description: `Wystąpił problem z wysłaniem faktur do n8n.`,
           variant: "destructive",
         });
       }

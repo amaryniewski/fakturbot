@@ -69,23 +69,11 @@ backend = "postgres"
 [functions.gmail-oauth]
 verify_jwt = false
 
-[functions.n8n-webhook]
+[functions.gmail-processor]
 verify_jwt = false
 
-[functions.send-to-n8n]
+[functions.fakturownia-api]
 verify_jwt = false
 
-[functions.ocr-webhook]
-verify_jwt = false
-
-[functions.ocr-complete]
-verify_jwt = false
-
-[functions.ocr-space]
-verify_jwt = false
-
-[functions.claude-vision-ocr]
-verify_jwt = false
-
-[functions.ocr-compare]
+[functions.imap-connect]
 verify_jwt = false

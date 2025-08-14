@@ -286,21 +286,34 @@ const handler = async (req: Request): Promise<Response> => {
                 messageHasValidAttachments = true; // Mark this message as having valid attachments
                 console.log(`Processed invoice: ${part.filename} from ${senderEmail} (user: ${user_id})`);
                 
-                // Auto-trigger OCR if enabled for THIS USER - use n8n OCR processor
+                // Auto-trigger OCR if enabled for THIS USER - send to n8n webhook
                 if (shouldAutoOCR) {
                   try {
-                    console.log(`Starting n8n OCR for user ${user_id}, invoice: ${part.filename}`);
-                    // Use n8n OCR processor instead of old edge functions
-                    await supabase.functions.invoke('n8n-ocr-processor', {
-                      body: { 
+                    console.log(`Sending to n8n webhook for user ${user_id}, invoice: ${part.filename}`);
+                    
+                    // Send directly to n8n webhook
+                    const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
+                    
+                    const webhookResponse = await fetch(n8nWebhookUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        userId: user_id,
                         invoiceId: invoiceRecord?.id,
                         invoiceUrl: publicUrl,
-                        userId: user_id
-                      }
+                        source: 'gmail-processor'
+                      })
                     });
-                    console.log(`n8n OCR processing started for ${part.filename}`);
+
+                    if (!webhookResponse.ok) {
+                      throw new Error(`n8n webhook failed: ${webhookResponse.status}`);
+                    }
+
+                    console.log(`Successfully sent invoice to n8n webhook: ${part.filename}`);
                   } catch (ocrError) {
-                    console.error(`OCR processing failed for ${part.filename}:`, ocrError);
+                    console.error(`Failed to send to n8n webhook for ${part.filename}:`, ocrError);
                   }
                 } else {
                   console.log(`OCR not started for ${part.filename} - user ${user_id} has auto OCR disabled`);

@@ -85,20 +85,33 @@ export function OCRDebugPanel() {
 
       if (error) throw error;
 
-      // Use n8n OCR processor instead of old functions
-      const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('n8n-ocr-processor', {
-        body: { 
+      // Send directly to n8n webhook (same as Dashboard)
+      const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
+      
+      // Update status to processing
+      await supabase
+        .from('invoices')
+        .update({ status: 'processing' })
+        .eq('id', invoiceId);
+      
+      const webhookResponse = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: (await supabase.auth.getUser()).data.user?.id,
           invoiceId: invoiceId,
           invoiceUrl: fullInvoice.file_url,
-          userId: (await supabase.auth.getUser()).data.user?.id
-        }
+          source: 'debug-panel'
+        })
       });
 
-      if (ocrError) {
-        throw ocrError;
+      if (!webhookResponse.ok) {
+        throw new Error(`Webhook failed: ${webhookResponse.status}`);
       }
 
-      console.log(`Manual n8n OCR processing completed for ${invoiceId}:`, ocrResult);
+      console.log(`Manual OCR sent to n8n for ${invoiceId}`);
       fetchData(); // Refresh data immediately
 
     } catch (error: any) {
