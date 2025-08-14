@@ -79,6 +79,7 @@ const statusBadge = (s: Item["status"]) => {
 };
 
 const Dashboard = () => {
+  console.log("🏠 Dashboard component loaded");
   const { toast } = useToast();
   const { processGmailInvoices, loading: gmailLoading } = useGmailIntegration();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
