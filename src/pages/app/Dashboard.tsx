@@ -223,14 +223,6 @@ const Dashboard = () => {
         throw new Error('Nie znaleziono faktur do wysłania');
       }
 
-      // Check if files have valid URLs
-      for (const invoice of invoicesToSend) {
-        console.log(`📄 Invoice ${invoice.file_name}: URL = ${invoice.file_url}`);
-        if (!invoice.file_url) {
-          console.error(`❌ Invoice ${invoice.file_name} has no file_url`);
-        }
-      }
-
       // ONLY send to webhook - no database updates
       const n8nWebhookUrl = 'https://primary-production-ed3c.up.railway.app/webhook/9e594295-18f9-428c-b90d-93e49648e856';
       console.log("🌐 Webhook URL:", n8nWebhookUrl);
@@ -239,52 +231,41 @@ const Dashboard = () => {
         try {
           console.log(`📤 Sending invoice to webhook: ${invoice.file_name} (${invoice.id})`);
           
-          // First, let's try to fetch the actual file content to send
-          let fileContent = null;
-          let fileBlob = null;
-          
-          if (invoice.file_url) {
-            try {
-              console.log(`🔄 Fetching file content from: ${invoice.file_url}`);
-              const fileResponse = await fetch(invoice.file_url);
-              if (fileResponse.ok) {
-                fileBlob = await fileResponse.blob();
-                fileContent = await fileBlob.arrayBuffer();
-                console.log(`✅ File content fetched: ${fileContent.byteLength} bytes`);
-              } else {
-                console.warn(`⚠️ Could not fetch file content: ${fileResponse.status}`);
-              }
-            } catch (fileError) {
-              console.warn(`⚠️ Error fetching file content:`, fileError);
-            }
+          if (!invoice.file_url) {
+            throw new Error(`Invoice ${invoice.file_name} has no file URL`);
           }
+
+          // Fetch the actual PDF file from Supabase Storage
+          console.log(`🔄 Fetching PDF file from: ${invoice.file_url}`);
+          const fileResponse = await fetch(invoice.file_url);
           
-          const payload = {
-            userId: user.id,
-            invoiceId: invoice.id,
-            invoiceUrl: invoice.file_url,
-            fileName: invoice.file_name,
-            source: 'fakturbot-dashboard',
-            timestamp: new Date().toISOString(),
-            // Include file info if we got it
-            fileSize: fileContent ? fileContent.byteLength : null,
-            hasFileContent: !!fileContent
-          };
-          console.log("📦 Payload:", payload);
+          if (!fileResponse.ok) {
+            throw new Error(`Failed to fetch file: ${fileResponse.status} ${fileResponse.statusText}`);
+          }
+
+          const fileBlob = await fileResponse.blob();
+          console.log(`✅ File fetched: ${fileBlob.size} bytes, type: ${fileBlob.type}`);
+
+          // Create FormData with binary file data
+          const formData = new FormData();
+          formData.append('data', fileBlob, invoice.file_name); // n8n expects 'data' field
+          formData.append('userId', user.id);
+          formData.append('invoiceId', invoice.id);
+          formData.append('fileName', invoice.file_name);
+          formData.append('source', 'fakturbot-dashboard');
+          formData.append('timestamp', new Date().toISOString());
+
+          console.log(`📦 Sending FormData with file: ${invoice.file_name}`);
           
           const webhookResponse = await fetch(n8nWebhookUrl, {
             method: 'POST',
             mode: 'cors',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: JSON.stringify(payload)
+            body: formData // Send FormData, not JSON
+            // Don't set Content-Type header - let browser set it for FormData
           });
           
           console.log(`📡 Webhook response for ${invoice.file_name}: Status ${webhookResponse.status}, OK: ${webhookResponse.ok}`);
           
-          // Check if the response is ok or if it's a CORS issue
           if (!webhookResponse.ok) {
             let errorMessage;
             try {
@@ -299,7 +280,7 @@ const Dashboard = () => {
           }
           
           const responseData = await webhookResponse.text();
-          console.log(`✅ Successfully sent invoice ${invoice.file_name} to webhook. Response:`, responseData);
+          console.log(`✅ Successfully sent PDF ${invoice.file_name} to n8n. Response:`, responseData);
           return { success: true, invoiceId: invoice.id };
           
         } catch (error) {
