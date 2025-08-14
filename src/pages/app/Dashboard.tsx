@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceExtractedData } from "@/components/InvoiceExtractedData";
 import { useGmailIntegration } from "@/hooks/useGmailIntegration";
+import { Trash2 } from "lucide-react";
 
 type Invoice = {
   id: string;
@@ -89,17 +90,30 @@ const Dashboard = () => {
     date.setDate(date.getDate() - 7);
     return date.toISOString().split('T')[0];
   });
+  const [toDate, setToDate] = useState(() => {
+    // Default to today
+    return new Date().toISOString().split('T')[0];
+  });
   
   useEffect(() => { document.title = "FakturBot – Dashboard"; }, []);
 
   const fetchInvoices = async () => {
     try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('User not authenticated');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
+        .eq('user_id', user.id)
         .order('received_at', { ascending: false });
 
       if (error) throw error;
+      console.log('Fetched invoices:', data?.length);
       setInvoices(data || []);
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
@@ -116,18 +130,58 @@ const Dashboard = () => {
   const processGmailEmails = async () => {
     setProcessing(true);
     try {
-      const result = await processGmailInvoices(fromDate);
+      const result = await processGmailInvoices(fromDate, toDate);
       
       toast({
         title: "Sukces",
-        description: `Przetworzono ${result.processedInvoices} nowych faktur z Gmail`,
+        description: `Przetworzono ${result.processedInvoices} nowych faktur z Gmail. OCR zostanie uruchomiony automatycznie.`,
       });
+
+      // Show OCR processing toast if invoices were processed
+      if (result.processedInvoices > 0) {
+        setTimeout(() => {
+          toast({
+            title: "🔄 OCR w toku",
+            description: "Przetwarzanie faktur rozpoczęte. Otrzymasz powiadomienie po zakończeniu.",
+            duration: 5000,
+          });
+        }, 1000);
+      }
       
       fetchInvoices();
     } catch (error: any) {
       // Error handling is done in the hook
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selected.length === 0) return;
+    
+    try {
+      // Delete from database
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .in('id', selected);
+
+      if (error) throw error;
+
+      toast({
+        title: "Usunięto",
+        description: `Usunięto ${selected.length} faktur`,
+      });
+
+      setSelected([]);
+      fetchInvoices();
+    } catch (error: any) {
+      console.error('Error deleting invoices:', error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć faktur",
+        variant: "destructive",
+      });
     }
   };
 
@@ -160,39 +214,26 @@ const Dashboard = () => {
 
         if (webhookError) {
           console.error('Webhook error details:', webhookError);
+          console.error('Webhook error type:', typeof webhookError);
+          console.error('Webhook error keys:', Object.keys(webhookError));
           toast({
             title: "Ostrzeżenie",
-            description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message || 'Nieznany błąd'}`,
+            description: `Faktury zatwierdzono, ale wystąpił problem z dalszym przetwarzaniem.`,
             variant: "destructive",
           });
-        } else if (data?.success) {
-          const successCount = data.results?.filter((r: any) => r.success).length || 0;
-          const errorCount = data.results?.filter((r: any) => !r.success).length || 0;
-          
-          if (errorCount > 0) {
-            toast({
-              title: "Częściowy sukces",
-              description: `Zatwierdzono ${selected.length} faktur. Wysłano ${successCount}, błędów: ${errorCount}`,
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Sukces",
-              description: `Zatwierdzono i wysłano ${selected.length} faktur do n8n`,
-            });
-          }
         } else {
           toast({
-            title: "Błąd",
-            description: data?.error || "Nieznany błąd podczas wysyłania do n8n",
-            variant: "destructive",
+            title: "Wysłano!",
+            description: `${selected.length} faktur zostało przesłanych do systemu księgowego. Przetwarzanie może potrwać kilka minut.`,
           });
         }
       } catch (webhookError: any) {
         console.error('Webhook error caught:', webhookError);
+        console.error('Webhook error message:', webhookError.message);
+        console.error('Webhook error stack:', webhookError.stack);
         toast({
           title: "Ostrzeżenie", 
-          description: `Faktury zatwierdzono, ale nie udało się wysłać do n8n: ${webhookError.message || String(webhookError)}`,
+          description: `Faktury zatwierdzono, ale wystąpił problem z dalszym przetwarzaniem.`,
           variant: "destructive",
         });
       }
@@ -211,6 +252,57 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchInvoices();
+
+    // Real-time subscription for invoice status changes
+    const channel = supabase
+      .channel('dashboard-invoice-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invoices'
+        },
+        (payload) => {
+          console.log('Invoice change detected:', payload);
+          
+          // Show toast notifications for status changes
+          if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+            const fileName = payload.new.file_name;
+            const newStatus = payload.new.status;
+            
+            switch (newStatus) {
+              case 'processing':
+                toast({
+                  title: "Przetwarzanie rozpoczęte",
+                  description: `Faktura ${fileName} jest teraz przetwarzana`,
+                });
+                break;
+              case 'success':
+                toast({
+                  title: "Przetwarzanie zakończone",
+                  description: `Faktura ${fileName} została pomyślnie przetworzona`,
+                });
+                break;
+              case 'failed':
+                toast({
+                  title: "Błąd przetwarzania",
+                  description: `Faktura ${fileName} nie mogła zostać przetworzona`,
+                  variant: "destructive",
+                });
+                break;
+            }
+          }
+          
+          // Refresh the invoice list
+          fetchInvoices();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Convert invoices to display format
@@ -257,12 +349,20 @@ const Dashboard = () => {
         <div className="border-b bg-card p-3 space-y-3 flex-shrink-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Pobierz od:</Label>
+              <Label htmlFor="topFromDate" className="text-sm whitespace-nowrap">Od:</Label>
               <Input
                 id="topFromDate"
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
+                className="w-auto text-sm"
+              />
+              <Label htmlFor="topToDate" className="text-sm whitespace-nowrap">Do:</Label>
+              <Input
+                id="topToDate"
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
                 className="w-auto text-sm"
               />
               <Button variant="outline" onClick={processGmailEmails} disabled={processing || gmailLoading} size="sm">
@@ -274,7 +374,16 @@ const Dashboard = () => {
             </div>
             <p className="text-sm text-muted-foreground">Showing {data.length} invoices</p>
           </div>
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <Button 
+              variant="outline" 
+              disabled={selected.length === 0} 
+              onClick={deleteSelected}
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Usuń wybrane ({selected.length})
+            </Button>
             <Button disabled={selected.length === 0} onClick={approveSelected}>
               Zatwierdź wybrane ({selected.length})
             </Button>
@@ -307,12 +416,20 @@ const Dashboard = () => {
                     <div className="py-8">
                       <p className="mb-4">Brak faktur z emaili. Połącz Gmail i rozpocznij automatyczne przetwarzanie.</p>
                       <div className="flex items-center gap-2 mb-4">
-                        <Label htmlFor="emptyFromDate" className="text-sm">Pobierz faktur od:</Label>
+                        <Label htmlFor="emptyFromDate" className="text-sm">Od:</Label>
                         <Input
                           id="emptyFromDate"
                           type="date"
                           value={fromDate}
                           onChange={(e) => setFromDate(e.target.value)}
+                          className="w-auto text-sm"
+                        />
+                        <Label htmlFor="emptyToDate" className="text-sm">Do:</Label>
+                        <Input
+                          id="emptyToDate"
+                          type="date"
+                          value={toDate}
+                          onChange={(e) => setToDate(e.target.value)}
                           className="w-auto text-sm"
                         />
                       </div>
@@ -376,15 +493,11 @@ const Dashboard = () => {
             
             <iframe 
               title="PDF preview" 
-              src={selectedItem.fileUrl || "/sample.pdf"} 
+              src={selectedItem.fileUrl || ""} 
               className="flex-1 w-full border-0" 
               style={{ minHeight: '500px' }}
               onError={(e) => {
                 console.error('PDF preview error:', e);
-                // Fallback to sample PDF if the file URL doesn't work
-                if (selectedItem.fileUrl) {
-                  (e.target as HTMLIFrameElement).src = "/sample.pdf";
-                }
               }}
             />
           </div>

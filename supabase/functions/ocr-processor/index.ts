@@ -81,19 +81,11 @@ const performOCR = async (fileUrl: string): Promise<string> => {
       throw new Error('Failed to download PDF');
     }
     
-    // For now, return mock OCR text
+    // For now, return empty string since we don't have real OCR implementation
+    // This prevents dummy data from being inserted into the database
     // TODO: Implement actual PDF text extraction
-    return `
-      FAKTURA NR F/2024/001
-      Data wystawienia: 15.01.2024
-      Termin płatności: 29.01.2024
-      
-      Sprzedawca:
-      Firma Example Sp. z o.o.
-      NIP: 123-456-78-90
-      
-      Do zapłaty: 1,230.00 zł
-    `;
+    console.log('OCR processing skipped - no real implementation yet');
+    return '';
     
   } catch (error) {
     console.error('OCR processing failed:', error);

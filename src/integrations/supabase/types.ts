@@ -136,6 +136,33 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_filter_settings: {
+        Row: {
+          allowed_sender_emails: string[] | null
+          created_at: string
+          filter_query: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allowed_sender_emails?: string[] | null
+          created_at?: string
+          filter_query?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allowed_sender_emails?: string[] | null
+          created_at?: string
+          filter_query?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       invoice_processing_rules: {
         Row: {
           created_at: string
