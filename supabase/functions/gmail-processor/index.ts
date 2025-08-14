@@ -307,8 +307,7 @@ const handler = async (req: Request): Promise<Response> => {
                     onConflict: 'user_id,gmail_message_id',
                     ignoreDuplicates: true 
                   })
-                  .select()
-                  .single();
+                  .select(); // Remove .single() as suggested
 
                 if (invoiceError) {
                   console.error(`❌ FAILED to create invoice for user ${ownerId}:`, invoiceError);
