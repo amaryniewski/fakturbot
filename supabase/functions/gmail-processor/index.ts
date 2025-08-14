@@ -201,14 +201,6 @@ const handler = async (req: Request): Promise<Response> => {
                   totalProcessed++;
                   console.log(`✅ CREATED INVOICE for USER ${user_id}: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}, User in record: ${invoiceData.user_id}`);
                   
-                  // Verify the invoice was created for the correct user
-                  if (invoiceData.user_id !== user_id) {
-                    console.error(`❌ CRITICAL ERROR: Invoice created for wrong user! Expected: ${user_id}, Got: ${invoiceData.user_id}`);
-                    // Delete the incorrectly assigned invoice
-                    await supabase.from('invoices').delete().eq('id', invoiceData.id);
-                    continue;
-                  }
-                  
                   // Trigger OCR processing with proper parameters
                   try {
                     await supabase.functions.invoke('ocr-processor', {
