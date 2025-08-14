@@ -42,14 +42,28 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get invoice details
+    // SECURITY: Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Authentication required');
+    }
+
+    // SECURITY: Fetch ONLY invoices belonging to the authenticated user
     const { data: invoices, error } = await supabase
       .from('invoices')
       .select('*')
-      .in('id', invoiceIds);
+      .in('id', invoiceIds)
+      .eq('user_id', user.id); // CRITICAL: Filter by user_id
 
     if (error) {
-      throw error;
+      console.error('Error fetching invoices:', error);
+      throw new Error(`Database error: ${error.message}`);
+    }
+
+    // SECURITY: Validate that all requested invoices belong to the user
+    if (invoices.length !== invoiceIds.length) {
+      console.error(`Security violation: User ${user.id} tried to access unauthorized invoices`);
+      throw new Error('Access denied: Some invoices not found or not authorized');
     }
 
     if (!invoices || invoices.length === 0) {

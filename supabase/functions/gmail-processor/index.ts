@@ -170,7 +170,7 @@ const handler = async (req: Request): Promise<Response> => {
                   .getPublicUrl(fileName);
 
                 // Create invoice record
-                const { error: invoiceError } = await supabase
+                const { data: invoiceData, error: invoiceError } = await supabase
                   .from('invoices')
                   .insert({
                     user_id: user_id,
@@ -183,20 +183,40 @@ const handler = async (req: Request): Promise<Response> => {
                     file_url: publicUrl,
                     status: 'new',
                     needs_review: true
-                  });
+                  })
+                  .select()
+                  .single();
 
                 if (invoiceError) {
                   console.error('Failed to create invoice:', invoiceError);
                   continue;
                 }
-
-                totalProcessed++;
-                console.log(`Processed invoice: ${part.filename} from ${senderEmail}`);
                 
                 // Trigger OCR processing
                 await supabase.functions.invoke('ocr-processor', {
-                  body: { fileName, userId: user_id }
+                  body: { 
+                    invoiceId: invoiceData.id, // Pass invoice ID instead of fileName
+                    userId: user_id 
+                  }
                 });
+
+                const invoiceData = await insertResponse.data;
+                if (invoiceData) {
+                  totalProcessed++;
+                  console.log(`Processed invoice: ${part.filename} from ${senderEmail}, ID: ${invoiceData.id}`);
+                  
+                  // Trigger OCR processing with proper parameters
+                  try {
+                    await supabase.functions.invoke('ocr-processor', {
+                      body: { 
+                        invoiceId: invoiceData.id, 
+                        userId: user_id 
+                      }
+                    });
+                  } catch (ocrError) {
+                    console.error('Failed to trigger OCR:', ocrError);
+                  }
+                }
               }
             }
           } catch (messageError) {

@@ -99,13 +99,25 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { fileName, userId } = await req.json();
-    
-    if (!fileName || !userId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing fileName or userId' }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+    const { invoiceId, userId } = await req.json();
+    console.log('OCR processor called for invoice:', invoiceId, 'user:', userId);
+
+    if (!invoiceId) {
+      throw new Error('Invoice ID is required');
+    }
+
+    // SECURITY: Validate user access to invoice
+    if (userId) {
+      const { data: invoiceCheck } = await supabase
+        .from('invoices')
+        .select('user_id')
+        .eq('id', invoiceId)
+        .eq('user_id', userId)
+        .single();
+      
+      if (!invoiceCheck) {
+        throw new Error('Access denied: Invoice not found or not authorized');
+      }
     }
 
     const supabase = createClient(
@@ -113,16 +125,16 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get the invoice record
+    // Get the invoice record with user validation
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .select('*')
-      .eq('user_id', userId)
-      .eq('file_url', `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/invoices/${fileName}`)
+      .eq('id', invoiceId)
+      .eq('user_id', userId || null)
       .single();
 
     if (invoiceError || !invoice) {
-      throw new Error('Invoice not found');
+      throw new Error('Invoice not found or access denied');
     }
 
     // Update status to processing
