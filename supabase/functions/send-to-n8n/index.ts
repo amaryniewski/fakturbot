@@ -17,6 +17,32 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     console.log("send-to-n8n function called");
+    
+    // 1. Extract and verify JWT from Authorization header
+    const auth = req.headers.get('Authorization');
+    if (!auth?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Missing Authorization' }), { 
+        status: 401, 
+        headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
+    }
+    const jwt = auth.slice(7);
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    const { data: { user }, error: authErr } = await admin.auth.getUser(jwt);
+    if (authErr || !user) {
+      console.error('Authentication failed:', authErr);
+      return new Response(JSON.stringify({ error: 'Authentication required' }), { 
+        status: 401, 
+        headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
+    }
+
+    console.log("Authenticated user:", user.id);
+
     const { invoiceIds }: SendToN8nRequest = await req.json();
     console.log("Received invoiceIds:", invoiceIds);
     
@@ -24,32 +50,28 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("No invoice IDs provided");
     }
 
-    // Get webhook URL from Supabase secrets - use TEST URL for debugging
-    const testWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL_TEST");
-    const prodWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL_PROD");
+    // 2. Get webhook URLs - prioritize PROD
+    const testUrl = Deno.env.get("N8N_WEBHOOK_URL_TEST")?.trim();
+    const prodUrl = Deno.env.get("N8N_WEBHOOK_URL_PROD")?.trim();
+    let webhookUrl = prodUrl || testUrl;
     
-    // Use test URL if available, fallback to prod URL
-    const webhookUrl = testWebhookUrl || prodWebhookUrl;
-    
-    console.log("Using webhook URL:", testWebhookUrl ? "TEST" : "PROD");
-    console.log("Webhook URL exists:", !!webhookUrl);
     if (!webhookUrl) {
-      throw new Error("N8N webhook URL not configured in Supabase secrets");
+      return new Response(JSON.stringify({ error: 'No N8N webhook URL configured' }), { 
+        status: 500, 
+        headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    console.log("Using webhook URL:", prodUrl ? "PROD" : "TEST");
 
-    // SECURITY: Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error('Authentication required');
-    }
+    // 3. Set invoices to queued status
+    await admin.from('invoices')
+      .update({ status: 'queued' })
+      .in('id', invoiceIds)
+      .eq('user_id', user.id);
 
     // SECURITY: Fetch ONLY invoices belonging to the authenticated user
-    const { data: invoices, error } = await supabase
+    const { data: invoices, error } = await admin
       .from('invoices')
       .select('*')
       .in('id', invoiceIds)
@@ -70,6 +92,13 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("No invoices found");
     }
 
+    // 4. Helper function to extract storage path from URL
+    function storagePathFromPublicUrl(url?: string) {
+      if (!url) return null;
+      const match = url.match(/\/storage\/v1\/object\/public\/invoices\/(.+)$/) || url.match(/\/invoices\/(.+)$/);
+      return match ? match[1] : null;
+    }
+
     // Download PDF files from Storage and prepare FormData with files
     const formData = new FormData();
     
@@ -79,19 +108,23 @@ const handler = async (req: Request): Promise<Response> => {
         try {
           console.log(`Downloading PDF for invoice ${invoice.id}: ${invoice.file_url}`);
           
-          // Get file from Supabase Storage
-          const { data: fileData, error: downloadError } = await supabase.storage
+          const path = storagePathFromPublicUrl(invoice.file_url);
+          if (!path) { 
+            console.error('Bad file_url for invoice', invoice.id, invoice.file_url); 
+            continue; 
+          }
+
+          const { data: fileData, error: dlErr } = await admin.storage
             .from('invoices')
-            .download(invoice.file_url.split('/invoices/')[1]); // Extract path after bucket name
+            .download(path);
           
-          if (downloadError) {
-            console.error(`Failed to download file for invoice ${invoice.id}:`, downloadError);
+          if (dlErr) {
+            console.error('Download failed for invoice', invoice.id, dlErr);
             continue;
           }
           
           if (fileData) {
-            // Convert blob to file and add to FormData with field name "data"
-            const file = new File([fileData], invoice.file_name, { type: 'application/pdf' });
+            const file = new File([fileData], invoice.file_name || 'invoice.pdf', { type: 'application/pdf' });
             formData.append('data', file);
             console.log(`Added file ${invoice.file_name} to FormData with field name "data"`);
           }
@@ -125,36 +158,54 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Sending to n8n webhook:", webhookUrl);
     console.log("Payload:", JSON.stringify(n8nPayload, null, 2));
 
-    // Send to n8n webhook with FormData (multipart/form-data)
-    console.log("About to send POST request to:", webhookUrl);
-    
-    const webhookResponse = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "User-Agent": "FakturBot/1.0",
-        // Don't set Content-Type for FormData - browser will set it with boundary
-      },
-      body: formData,
+    // 5. Send to n8n with fallback logic
+    const post = (url: string) => fetch(url, { 
+      method: 'POST', 
+      headers: { 'User-Agent': 'FakturBot/1.0' }, 
+      body: formData 
     });
 
-    console.log("Webhook response status:", webhookResponse.status);
-    console.log("Webhook response statusText:", webhookResponse.statusText);
-    console.log("Webhook response headers:", Object.fromEntries(webhookResponse.headers.entries()));
-
-    const webhookResult = await webhookResponse.text();
-    console.log("Webhook response body:", webhookResult);
-
-    if (!webhookResponse.ok) {
-      console.error("Webhook failed with status:", webhookResponse.status);
-      console.error("Response body:", webhookResult);
-      throw new Error(`Webhook request failed: ${webhookResponse.status} ${webhookResponse.statusText}. Response: ${webhookResult}`);
+    let resp = await post(webhookUrl);
+    if (!resp.ok && resp.status === 404 && testUrl && prodUrl && webhookUrl.includes('/webhook-test/')) {
+      console.warn('Test URL returned 404, retrying with PROD URL');
+      resp = await post(prodUrl);
     }
+
+    const body = await resp.text();
+    console.log("Webhook response status:", resp.status);
+    console.log("Webhook response body:", body);
+
+    if (!resp.ok) {
+      // Set invoices to failed status
+      await admin.from('invoices')
+        .update({ 
+          status: 'failed', 
+          last_processing_error: 'n8n dispatch error' 
+        })
+        .in('id', invoiceIds)
+        .eq('user_id', user.id);
+
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `Webhook failed ${resp.status}`, 
+        details: body 
+      }), { 
+        status: 502, 
+        headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
+    }
+
+    // 6. Set invoices to success status
+    await admin.from('invoices')
+      .update({ status: 'success' })
+      .in('id', invoiceIds)
+      .eq('user_id', user.id);
 
     return new Response(JSON.stringify({ 
       success: true,
       sent_invoices: invoices.length,
-      webhook_status: webhookResponse.status,
-      webhook_response: webhookResult
+      webhook_status: resp.status,
+      webhook_response: body
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },

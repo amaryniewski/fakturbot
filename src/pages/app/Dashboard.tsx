@@ -196,9 +196,13 @@ const Dashboard = () => {
       // Then send to n8n webhook
       console.log("Calling send-to-n8n function...");
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         const { data, error: webhookError } = await supabase.functions.invoke('send-to-n8n', {
           body: {
             invoiceIds: selected
+          },
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`
           }
         });
         console.log("send-to-n8n response:", { data, webhookError });
