@@ -912,16 +912,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ksef_user_stats: {
-        Row: {
-          duplicates_found: number | null
-          last_fetch: string | null
-          today_fetched: number | null
-          total_fetched: number | null
-          user_id: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
       audit_and_clean_cross_user_invoices: {
@@ -1083,6 +1073,16 @@ export type Database = {
           pending_operations: number
           today_fetched: number
           total_fetched: number
+        }[]
+      }
+      get_ksef_user_stats_cached: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          duplicates_found: number
+          last_fetch: string
+          today_fetched: number
+          total_fetched: number
+          user_id: string
         }[]
       }
       get_safe_fakturownia_connections: {
