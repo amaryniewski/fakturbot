@@ -1196,6 +1196,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_user_ksef_stats_secure: {
+        Args: { p_user_id?: string }
+        Returns: {
+          duplicates_found: number
+          last_fetch: string
+          today_fetched: number
+          total_fetched: number
+          user_id: string
+        }[]
+      }
       insert_encrypted_fakturownia_connection: {
         Args: {
           p_api_token: string
