@@ -331,6 +331,201 @@ export type Database = {
         }
         Relationships: []
       }
+      ksef_config: {
+        Row: {
+          auto_fetch: boolean
+          created_at: string
+          environment: string
+          fetch_interval_minutes: number
+          id: string
+          is_active: boolean
+          last_fetch_timestamp: string | null
+          nip: string
+          token_encrypted: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_fetch?: boolean
+          created_at?: string
+          environment: string
+          fetch_interval_minutes?: number
+          id?: string
+          is_active?: boolean
+          last_fetch_timestamp?: string | null
+          nip: string
+          token_encrypted: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_fetch?: boolean
+          created_at?: string
+          environment?: string
+          fetch_interval_minutes?: number
+          id?: string
+          is_active?: boolean
+          last_fetch_timestamp?: string | null
+          nip?: string
+          token_encrypted?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ksef_error_logs: {
+        Row: {
+          context_data: Json | null
+          created_at: string
+          error_code: string | null
+          error_message: string
+          error_type: string
+          id: string
+          operation_id: string | null
+          stack_trace: string | null
+          user_id: string | null
+        }
+        Insert: {
+          context_data?: Json | null
+          created_at?: string
+          error_code?: string | null
+          error_message: string
+          error_type: string
+          id?: string
+          operation_id?: string | null
+          stack_trace?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          context_data?: Json | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string
+          error_type?: string
+          id?: string
+          operation_id?: string | null
+          stack_trace?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ksef_fetch_operations: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          duplicates_found: number
+          error_code: string | null
+          error_message: string | null
+          id: string
+          invoices_found: number
+          invoices_new: number
+          invoices_processed: number
+          operation_type: string
+          packages_count: number
+          processing_time_ms: number | null
+          query_id: string | null
+          request_data: Json | null
+          response_data: Json | null
+          session_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          duplicates_found?: number
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          invoices_found?: number
+          invoices_new?: number
+          invoices_processed?: number
+          operation_type: string
+          packages_count?: number
+          processing_time_ms?: number | null
+          query_id?: string | null
+          request_data?: Json | null
+          response_data?: Json | null
+          session_id?: string | null
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          duplicates_found?: number
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          invoices_found?: number
+          invoices_new?: number
+          invoices_processed?: number
+          operation_type?: string
+          packages_count?: number
+          processing_time_ms?: number | null
+          query_id?: string | null
+          request_data?: Json | null
+          response_data?: Json | null
+          session_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ksef_invoice_registry: {
+        Row: {
+          buyer_nip: string | null
+          currency: string
+          first_seen_at: string
+          id: string
+          invoice_hash: string
+          issue_date: string
+          ksef_element_reference_number: string
+          ksef_invoice_number: string
+          last_updated_at: string
+          parsed_data_id: string | null
+          seller_nip: string
+          status: string
+          total_amount: number
+          user_id: string
+        }
+        Insert: {
+          buyer_nip?: string | null
+          currency?: string
+          first_seen_at?: string
+          id?: string
+          invoice_hash: string
+          issue_date: string
+          ksef_element_reference_number: string
+          ksef_invoice_number: string
+          last_updated_at?: string
+          parsed_data_id?: string | null
+          seller_nip: string
+          status: string
+          total_amount: number
+          user_id: string
+        }
+        Update: {
+          buyer_nip?: string | null
+          currency?: string
+          first_seen_at?: string
+          id?: string
+          invoice_hash?: string
+          issue_date?: string
+          ksef_element_reference_number?: string
+          ksef_invoice_number?: string
+          last_updated_at?: string
+          parsed_data_id?: string | null
+          seller_nip?: string
+          status?: string
+          total_amount?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       mailbox_tokens: {
         Row: {
           access_token: string
@@ -550,6 +745,57 @@ export type Database = {
           },
         ]
       }
+      parsed_data: {
+        Row: {
+          buyer_name: string | null
+          created_at: string
+          currency: string | null
+          id: string
+          invoice_number: string | null
+          issue_date: string | null
+          ksef_element_reference_number: string | null
+          ksef_fetch_date: string | null
+          ksef_original_xml: string | null
+          seller_name: string | null
+          source_type: string | null
+          total_amount: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          buyer_name?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          ksef_element_reference_number?: string | null
+          ksef_fetch_date?: string | null
+          ksef_original_xml?: string | null
+          seller_name?: string | null
+          source_type?: string | null
+          total_amount?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          buyer_name?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          ksef_element_reference_number?: string | null
+          ksef_fetch_date?: string | null
+          ksef_original_xml?: string | null
+          seller_name?: string | null
+          source_type?: string | null
+          total_amount?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -630,7 +876,52 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ksef_auto_fetch_status: {
+        Row: {
+          auto_fetch: boolean | null
+          environment: string | null
+          fetch_interval_minutes: number | null
+          last_fetch_timestamp: string | null
+          new_invoices_24h: number | null
+          nip: string | null
+          status: string | null
+          successful_fetches_24h: number | null
+          user_id: string | null
+        }
+        Insert: {
+          auto_fetch?: boolean | null
+          environment?: string | null
+          fetch_interval_minutes?: number | null
+          last_fetch_timestamp?: string | null
+          new_invoices_24h?: never
+          nip?: string | null
+          status?: never
+          successful_fetches_24h?: never
+          user_id?: string | null
+        }
+        Update: {
+          auto_fetch?: boolean | null
+          environment?: string | null
+          fetch_interval_minutes?: number | null
+          last_fetch_timestamp?: string | null
+          new_invoices_24h?: never
+          nip?: string | null
+          status?: never
+          successful_fetches_24h?: never
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ksef_user_stats: {
+        Row: {
+          duplicates_found: number | null
+          last_fetch: string | null
+          today_fetched: number | null
+          total_fetched: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       audit_and_clean_cross_user_invoices: {
@@ -687,6 +978,14 @@ export type Database = {
       }
       check_gmail_connection_exists: {
         Args: { p_email: string }
+        Returns: boolean
+      }
+      check_ksef_invoice_exists: {
+        Args: {
+          p_element_reference_number: string
+          p_invoice_hash: string
+          p_user_id: string
+        }
         Returns: boolean
       }
       check_token_security: {
@@ -775,6 +1074,17 @@ export type Database = {
         Args: { p_gmail_message_id: string }
         Returns: string
       }
+      get_ksef_fetch_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          avg_processing_time_ms: number
+          duplicates_found: number
+          last_fetch: string
+          pending_operations: number
+          today_fetched: number
+          total_fetched: number
+        }[]
+      }
       get_safe_fakturownia_connections: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -810,6 +1120,18 @@ export type Database = {
           provider: string
           server: string
           status: string
+        }[]
+      }
+      get_system_ksef_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          active_configs: number
+          avg_processing_time_ms: number
+          failed_operations_24h: number
+          successful_operations_24h: number
+          total_invoices_24h: number
+          total_operations_24h: number
+          total_users: number
         }[]
       }
       get_user_data_isolation_report: {
@@ -954,6 +1276,10 @@ export type Database = {
           violation_count: number
           violation_type: string
         }[]
+      }
+      refresh_ksef_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       revoke_connection: {
         Args: { p_connection_id: string; p_connection_type: string }
